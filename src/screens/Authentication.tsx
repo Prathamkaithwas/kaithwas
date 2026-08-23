@@ -662,22 +662,12 @@ export function Authentication({
 const SEQUENCE_LEN = 4
 
 function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
-  const { db, setVaultSecurity, resetVault } = useStore()
+  const { db, setVaultSecurity } = useStore()
   const [sequence, setSequence] = useState<LockIconId[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
-
-  // Escape hatch for a lock nobody can reproduce any more — most likely an
-  // install that set a digit PIN under the old scheme, before this screen
-  // moved to a tapped icon sequence, and has no way to type digits into it
-  // any more to prove they know it. Wipes vaultSecurity along with
-  // vaultItems/passwordItems (see resetVault in store.tsx) rather than just
-  // the lock, since anything encrypted under the unrecoverable key is
-  // already permanently unreadable regardless — keeping the ciphertext
-  // around serves nothing once the key that opened it is gone.
-  const [confirmReset, setConfirmReset] = useState(false)
 
   // First-ever visit: no lock exists yet, so this same screen doubles as
   // setup — pick four icons, in order, then tap the same four again to
@@ -887,33 +877,7 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
           </button>
           <span aria-hidden />
         </div>
-
-        {!setupNeeded && (
-          <button
-            className="text-[12px] underline"
-            style={{ color: 'rgb(255 255 255 / 0.55)' }}
-            onClick={() => setConfirmReset(true)}
-          >
-            Can't get in?
-          </button>
-        )}
       </div>
-
-      <Confirm
-        open={confirmReset}
-        title="Reset Shafali?"
-        body="Erases everything in Vault and Passwords for good, and lets you set a new sequence. Documents aren't behind this lock and are untouched. There is no way back in without it."
-        confirmLabel="Erase and start over"
-        danger
-        onClose={() => setConfirmReset(false)}
-        onConfirm={() => {
-          resetVault()
-          setConfirmReset(false)
-          setSequence([])
-          setFirstSequence(null)
-          setError('')
-        }}
-      />
     </div>
   )
 }
