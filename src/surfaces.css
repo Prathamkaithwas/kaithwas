@@ -1,0 +1,386 @@
+/* ==========================================================================
+   Habit card surfaces.
+
+   Eight treatments, dealt out one per card. Each is built from two throwaway
+   elements inside .habit-fx — `i` and `b` — which mean something different in
+   every surface, because eight named layers would have been eight sets of
+   classes doing the same job.
+
+   These run on their own, always, which is what the owner asked for after
+   seeing the press-to-play version. Holding a card no longer starts anything
+   — it speeds it up, which is the "responds to attention" behaviour several
+   of the references described for hover.
+
+   The cost is real and worth stating: eight infinite animations run whenever
+   this tab is open. They are transform/opacity/mask only so they stay on the
+   compositor, and they stop the moment you leave the tab, because the whole
+   screen unmounts. If the phone ever runs warm on Habits, this file is why.
+   ========================================================================== */
+
+.habit-fx {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.habit-fx > i,
+.habit-fx > b {
+  position: absolute;
+  display: block;
+}
+
+/* -- 1. ordered dither ---------------------------------------------------
+   A real dot grid, not noise: hard-edged pixels on a fixed lattice. The bloom
+   is a radial mask crawling across it in stepped frames, so amber pixels
+   switch on in blocks and gather rather than fading up smoothly.
+
+   The bloom's centre is a custom property, not a plain `mask-position`
+   keyframe — `mask-position` moves a mask *image* within its own box, and a
+   bare `radial-gradient()` mask has no intrinsic size of its own, so it
+   defaults to exactly covering the element. With the image and the box the
+   same size there is no room for `mask-position` to move it: the animation
+   ran (every frame really did compute a new position) but produced zero
+   visible motion, leaving the bloom stuck wherever the gradient's own
+   `at __%` was written — off to the left, permanently, on every card. A
+   `@property` lets the gradient's own centre be the animated value instead,
+   which the browser can actually interpolate frame to frame. */
+@property --dither-x {
+  syntax: '<percentage>';
+  inherits: false;
+  initial-value: -20%;
+}
+.habit-tile[data-surface="dither"] .habit-fx > i {
+  inset: 0;
+  --dither-x: -20%;
+  background-image: radial-gradient(circle, #ffb547 0.9px, transparent 1.1px);
+  background-size: 4px 4px;
+  -webkit-mask-image: radial-gradient(circle at var(--dither-x) 50%, #000 0%, transparent 42%);
+  mask-image: radial-gradient(circle at var(--dither-x) 50%, #000 0%, transparent 42%);
+  animation: dither-crawl 2.8s steps(9, end) infinite;
+}
+
+@keyframes dither-crawl {
+  0% {
+    --dither-x: -20%;
+  }
+  100% {
+    --dither-x: 120%;
+  }
+}
+
+/* -- 2. lenticular -------------------------------------------------------
+   Fine vertical ridges over two tinted layers. Holding slides them opposite
+   ways, so which tone you see changes with the ridge alignment rather than
+   one simply fading into the other. */
+.habit-tile[data-surface="lenticular"] .habit-fx > i,
+.habit-tile[data-surface="lenticular"] .habit-fx > b {
+  inset: -20% -40%;
+}
+
+.habit-tile[data-surface="lenticular"] .habit-fx > i {
+  background: repeating-linear-gradient(90deg, #ffffff 0 2px, transparent 2px 4px);
+}
+
+.habit-tile[data-surface="lenticular"] .habit-fx > b {
+  background: repeating-linear-gradient(90deg, #000000 0 2px, transparent 2px 4px);
+}
+
+.habit-tile[data-surface="lenticular"] .habit-fx > i {
+  opacity: 0.22;
+  animation: lent-a 2.4s linear infinite alternate;
+}
+
+.habit-tile[data-surface="lenticular"] .habit-fx > b {
+  opacity: 0.28;
+  animation: lent-b 2.4s linear infinite alternate;
+}
+
+@keyframes lent-a {
+  to {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes lent-b {
+  to {
+    transform: translateX(-4px);
+  }
+}
+
+/* -- 3. orbiting specular ------------------------------------------------
+   A brushed panel with one soft light walking a circle around it. Rotation on
+   the outer box, offset on the light itself, so the highlight orbits rather
+   than spinning on the spot. */
+.habit-tile[data-surface="specular"] .habit-fx > b {
+  inset: 0;
+  background: repeating-linear-gradient(
+    102deg,
+    rgba(255, 255, 255, 0.05) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.habit-tile[data-surface="specular"] .habit-fx > i {
+  inset: 0;
+  transform-origin: center;
+}
+
+.habit-tile[data-surface="specular"] .habit-fx > i::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 74%;
+  height: 74%;
+  margin: -37% 0 0 -37%;
+  border-radius: 50%;
+  transform: translateX(38%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.42) 0%, transparent 66%);
+}
+
+.habit-tile[data-surface="specular"] .habit-fx > i {
+  animation: fx-orbit 3.4s linear infinite;
+}
+
+@keyframes fx-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* -- 4. polarized foil ---------------------------------------------------
+   Invisible head-on. Holding tips the card and sweeps a narrow, desaturated
+   conic band across it, the way security foil catches at a grazing angle. */
+.habit-tile[data-surface="foil"] {
+  transition: transform 320ms var(--ease-out);
+}
+
+.habit-tile[data-surface="foil"][data-held] {
+  transform: perspective(600px) rotateX(7deg) rotateY(-9deg);
+}
+
+.habit-tile[data-surface="foil"] .habit-fx > i {
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(196, 214, 255, 0.5) 16deg,
+    rgba(255, 226, 196, 0.42) 26deg,
+    transparent 44deg,
+    transparent 360deg
+  );
+}
+
+.habit-tile[data-surface="foil"] .habit-fx > i {
+  animation: fx-orbit 2.6s linear infinite;
+}
+
+/* -- 5. metaballs --------------------------------------------------------
+   Two blurred blobs on a clipped dark field, put through a hard contrast
+   curve. Blur plus contrast is what makes their edges snap together into a
+   liquid neck as they meet, instead of two circles merely overlapping. */
+.habit-tile[data-surface="metaball"] .habit-fx {
+  background: rgba(0, 0, 0, 0.42);
+  filter: blur(6px) contrast(24);
+}
+
+.habit-tile[data-surface="metaball"] .habit-fx > i,
+.habit-tile[data-surface="metaball"] .habit-fx > b {
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  margin-top: -17px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.habit-tile[data-surface="metaball"] .habit-fx > i {
+  left: 14%;
+}
+
+.habit-tile[data-surface="metaball"] .habit-fx > b {
+  right: 14%;
+}
+
+.habit-tile[data-surface="metaball"] .habit-fx > i {
+  animation: meta-a 2.6s ease-in-out infinite alternate;
+}
+
+.habit-tile[data-surface="metaball"] .habit-fx > b {
+  animation: meta-b 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes meta-a {
+  to {
+    transform: translateX(46px) scale(0.62);
+  }
+}
+
+@keyframes meta-b {
+  to {
+    transform: translateX(-46px) scale(1.34);
+  }
+}
+
+/* -- 6. moire lens -------------------------------------------------------
+   Two fine radial line fields, counter-rotating slowly. The bands are pure
+   interference — neither layer contains them, they exist only where the two
+   disagree, which is why they appear to breathe in depth. */
+.habit-tile[data-surface="moire"] .habit-fx > i,
+.habit-tile[data-surface="moire"] .habit-fx > b {
+  inset: -60%;
+  background: repeating-radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.16) 0 1px,
+    transparent 1px 5px
+  );
+}
+
+.habit-tile[data-surface="moire"] .habit-fx > i {
+  animation: fx-orbit 26s linear infinite;
+}
+
+.habit-tile[data-surface="moire"] .habit-fx > b {
+  animation: fx-orbit 21s linear infinite reverse;
+}
+
+/* -- 7. aurora (new) -----------------------------------------------------
+   Two wide colour washes drifting past each other behind the card. Quiet —
+   this is the one that does not want to be noticed. */
+.habit-tile[data-surface="aurora"] .habit-fx > i,
+.habit-tile[data-surface="aurora"] .habit-fx > b {
+  width: 70%;
+  height: 160%;
+  filter: blur(14px);
+}
+
+.habit-tile[data-surface="aurora"] .habit-fx > i {
+  left: -10%;
+  top: -30%;
+  background: radial-gradient(closest-side, rgba(120, 224, 255, 0.5), transparent);
+}
+
+.habit-tile[data-surface="aurora"] .habit-fx > b {
+  right: -10%;
+  top: -30%;
+  background: radial-gradient(closest-side, rgba(255, 170, 220, 0.45), transparent);
+}
+
+.habit-tile[data-surface="aurora"] .habit-fx > i {
+  animation: aur-a 4.2s ease-in-out infinite alternate;
+}
+
+.habit-tile[data-surface="aurora"] .habit-fx > b {
+  animation: aur-b 5.1s ease-in-out infinite alternate;
+}
+
+@keyframes aur-a {
+  to {
+    transform: translate(46px, -18px);
+  }
+}
+
+@keyframes aur-b {
+  to {
+    transform: translate(-40px, 22px);
+  }
+}
+
+/* -- 8. perspective grid (new) -------------------------------------------
+   Two fine line fields laid flat and tipped away from the viewer, with a
+   focal point at the vanishing centre. Architectural rather than retro: thin
+   lines, low contrast, no glow. */
+.habit-tile[data-surface="grid"] .habit-fx > i {
+  inset: -30%;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 22px);
+  transform-origin: center 70%;
+  /* The plane travels toward the viewer forever. It shifts by exactly one
+     22px cell, which is the pattern's own period, so the loop point lands on
+     an identical frame and there is no visible jump. */
+  animation: grid-travel 6s linear infinite;
+}
+
+/* Held, the field tips further and comes closer — the "toward the viewer"
+   half of the reference, on a press instead of a hover. A separate keyframe
+   pair rather than a speed change, so the travel keeps its own pace. */
+.habit-tile[data-surface="grid"][data-held] .habit-fx > i {
+  animation: grid-travel-near 6s linear infinite;
+}
+
+@keyframes grid-travel {
+  from {
+    transform: perspective(300px) rotateX(58deg) scale(1) translateY(0);
+  }
+  to {
+    transform: perspective(300px) rotateX(58deg) scale(1) translateY(22px);
+  }
+}
+
+@keyframes grid-travel-near {
+  from {
+    transform: perspective(300px) rotateX(64deg) scale(1.25) translateY(0);
+  }
+  to {
+    transform: perspective(300px) rotateX(64deg) scale(1.25) translateY(22px);
+  }
+}
+
+.habit-tile[data-surface="grid"] .habit-fx > b {
+  left: 50%;
+  top: 52%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.5) 0%, transparent 62%);
+}
+
+/* Card content has to float above whichever surface is running. */
+.habit-tile-head,
+.habit-big,
+.habit-dots,
+.habit-check {
+  position: relative;
+  z-index: 1;
+}
+
+/* Holding a card leans into it: the same motion, roughly half again as fast.
+   Set on the layers rather than per surface, so it applies to all eight
+   without eight more rules. */
+.habit-tile[data-held] .habit-fx > i,
+.habit-tile[data-held] .habit-fx > b {
+  animation-duration: 1.4s;
+}
+/* The grid switches keyframes rather than speed when held, so it opts out of
+   the blanket rule above. */
+.habit-tile[data-surface="grid"][data-held] .habit-fx > i {
+  animation-duration: 6s;
+}
+/* Except the two whose whole character is slowness — sped up they stop being
+   an interference pattern and a drift, and become a spin and a wobble. */
+.habit-tile[data-surface="moire"][data-held] .habit-fx > i {
+  animation-duration: 13s;
+}
+.habit-tile[data-surface="moire"][data-held] .habit-fx > b {
+  animation-duration: 10s;
+}
+.habit-tile[data-surface="aurora"][data-held] .habit-fx > i,
+.habit-tile[data-surface="aurora"][data-held] .habit-fx > b {
+  animation-duration: 2.6s;
+}
+
+/* Someone who has asked the OS for less motion gets the static per-surface
+   look with none of the eight looping — the same call every other animation
+   in this app makes. Each surface still has its own background/mask, so a
+   card never goes blank, it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .habit-fx > i,
+  .habit-fx > b {
+    animation: none;
+  }
+}

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the bg custom property in index.css. This is the colour
+         Android paints in the gap between the splash screen going away and
+         the WebView's first frame arriving; without it the DayNight parent
+         theme supplies white, which is a bright flash on every cold start of
+         a dark-first app. -->
+    <color name="appBackground">#0D0F12</color>
+</resources>

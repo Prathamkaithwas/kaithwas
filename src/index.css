@@ -1,0 +1,5679 @@
+@import 'tailwindcss';
+/* Habit card surfaces — its own file; eight treatments is a lot of CSS to
+   bury in the middle of the design system. */
+@import './surfaces.css';
+
+/* The app's one and only typeface, everywhere — no system-font fallback
+   stack, so every device renders the exact same letterforms rather than
+   whatever the OS happens to ship. One variable-font file covers the whole
+   300–700 weight range Comfortaa ships (light through bold) instead of
+   pulling in five separate static files for the same coverage. Self-hosted
+   from /fonts — this app runs offline inside a WebView with no network to
+   fetch a Google Fonts CDN link from. */
+@font-face {
+  font-family: 'Comfortaa';
+  src: url('/fonts/Comfortaa-Variable.ttf') format('truetype-variations');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================================
+   Kaithwas — dense, flat, high-contrast, dark-first.
+
+   Design rules this file enforces, in order of how badly the last build broke
+   them:
+
+   1. No glassmorphism. There is no backdrop-filter anywhere in this file, and
+      every surface is fully opaque. Elevation is built from solid tone steps
+      (--bg → --surface → --surface-2 → --surface-3), never from transparency,
+      because a translucent panel over a dark background turns into mud and
+      loses contrast exactly where the numbers are.
+
+      This rule was broken screen by screen and then restored. At its worst
+      there were 53 backdrop-filter declarations here, including one per row
+      on Kitee and one per key on the vault pad — every one of them a
+      separate compositing layer plus, in most cases, a raster SVG
+      displacement pass. It looked right on a desktop GPU and stalled a real
+      phone. If a surface needs to feel lifted, give it a lighter tone, a lit
+      top lip and a shadow; that is what every panel in this file does now,
+      and it costs nothing to scroll.
+   2. Dense, but not cramped. Around 8 transaction rows fit a phone screen
+      with every field still readable at arm's length. The previous build
+      spent about a third of the screen on chrome; this one spends ~19%.
+   3. High contrast. Body text is a solid colour. Muted text is a lighter grey
+      that still clears 4.5:1, not white at 40% opacity — this gets read at
+      arm's length, one-handed, sometimes in daylight.
+   4. Motion is functional and short: <=200ms. Every idle animation the last
+      build had (drifting sheens, pulsing glows, travelling rails) is gone.
+      The one deliberate exception is the calculator's wave divider, which the
+      owner asked for by name — it only runs while the keypad is open, and it
+      is transform-only so it stays on the compositor.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Safe area.
+     On Android these are all pinned to 0: MainActivity insets the WebView
+     itself with margins, so the viewport already excludes the system bars and
+     the keyboard, and anything added here would be a second gap on top of
+     that. env() is the fallback for the browser and iOS, where the page does
+     still draw behind the bars. See lib/insets.ts. */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --kbh: 0px;
+
+  /* Layout rhythm — tight on purpose. */
+  --nav-h: 52px;
+  /* Every top-bar row is exactly this tall, whatever it contains, so moving
+     between tabs and sub-tabs never shifts the page under your thumb. */
+  --bar-h: 52px;
+  --content-pb: calc(var(--nav-h) + var(--sab) + 76px);
+
+  /* Radii. Nudged up from the original 6/8/12 towards what iOS uses for
+     grouped lists and sheets — softer corners without the pill-shaped,
+     space-wasting look the first build had. */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+
+  /* Motion. Functional only, and capped at 200ms. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 100ms;
+  --dur: 160ms;
+  --dur-slow: 200ms;
+
+  /* Semantic colour. --accent is overwritten from settings at runtime.
+
+     The reds are a deep vampire crimson rather than the old soft coral.
+     Two of them: --accent is the surface red, dark enough that white text
+     sits on it cleanly, while --expense is a few steps brighter because it
+     is used as *text* on a near-black background and the surface red would
+     not clear the contrast floor there. */
+  --accent: #c41230;
+  --income: #4c9ef8;
+  --expense: #e83a52;
+  --transfer: #9aa0a6;
+}
+
+/* --------------------------------------------------------------------------
+   Dark is the default and the one that gets designed. Solid tone steps, each
+   a real colour, so a surface stacked on a surface still reads as separate.
+   -------------------------------------------------------------------------- */
+:root,
+.dark {
+  color-scheme: dark;
+
+  --bg: #0d0f12;
+  --surface: #16191d;
+  --surface-2: #1e2227;
+  --surface-3: #282d33;
+
+  --line: #262b31;
+  --line-strong: #363c44;
+
+  --text: #f2f4f7;
+  --text-2: #c3c9d2;
+  --muted: #98a0ab;
+
+  --scrim: rgba(0, 0, 0, 0.6);
+  --skel: #1e2227;
+
+  /* Calculator: a violet slab under a pale paper display, per the reference.
+     Every one of these is a solid colour — the look comes from the two halves
+     and the wave between them, not from anything translucent. */
+  --calc-panel: #5b4d86;
+  /* Pulled further from --calc-panel than a plain tint step: the back
+     wave has to read as a distinct layer behind the front one, which is
+     what gives the divider depth rather than looking like one shape. */
+  --calc-panel-soft: #8375b3;
+  --calc-paper: #e9e7ec;
+  --calc-ink: #4b4460;
+  --calc-ink-soft: #8d87a0;
+  --calc-key: #ffffff;
+  --calc-key-soft: #d9d2ea;
+  --calc-key-tall: #6d5f97;
+  --calc-warm: #f4695d;
+  --calc-lit-a: #9ae66e;
+  --calc-lit-b: #2fb88a;
+}
+
+.light {
+  color-scheme: light;
+
+  --bg: #f2f3f5;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eceef1;
+
+  --line: #e0e3e8;
+  --line-strong: #c8cdd4;
+
+  --text: #14161a;
+  --text-2: #3c424b;
+  --muted: #5f6772;
+
+  --scrim: rgba(12, 14, 18, 0.4);
+  --skel: #eceef1;
+
+  --income: #1f7ad4;
+  --expense: #b8102a;
+}
+
+/* ==========================================================================
+   Base
+
+   These element resets MUST stay inside @layer base.
+
+   Tailwind puts its utilities in @layer utilities, and in the cascade an
+   *unlayered* rule beats every layered one regardless of specificity. Written
+   outside a layer, the `button { padding: 0 }` below silently overrode every
+   px-/py-/pl- utility on every button in the app — rows, sub-tabs, settings,
+   pickers — which is what made the whole UI look cramped against its edges,
+   and why adjusting those utilities appeared to do nothing.
+   ========================================================================== */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    /* "only this font" — Comfortaa with nothing to fall back to but the
+       browser's own generic sans-serif, so a font-load hiccup never quietly
+       reverts the app to Segoe UI/Roboto without it being obvious something
+       is wrong. */
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: #fff;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* Vertical panning is the browser's job here; horizontal is ours.
+     Without this the scroller defaults to touch-action:auto, the browser
+     claims sideways drags for itself, and the swipe-between-tabs gesture
+     never fires anywhere over the content — which made swiping look like it
+     only worked on the sub-tab strip, the one element that did set pan-y. */
+  touch-action: pan-y;
+}
+
+/* ==========================================================================
+   Typography — a small scale, all of it legible at arm's length.
+   No step uses opacity to soften text; muted is its own solid colour.
+   ========================================================================== */
+
+.t-title {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  /* Tinted by the open tab. Unset — Vault, Settings — falls back to plain
+     text, so only the screens that own a look get coloured. */
+  color: var(--tab-tint, var(--text));
+  transition: color 420ms var(--ease-out);
+}
+
+/* The bar takes the open tab's ground, and crosses to the next one rather
+   than cutting. Colour, not gradient: gradients do not transition, and the
+   move between tabs is the whole point. */
+.tab-head {
+  transition:
+    background-color 420ms var(--ease-out),
+    border-color 420ms var(--ease-out);
+}
+.t-h1 {
+  font-size: 17px;
+  font-weight: 600;
+}
+.t-h2 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.t-sub {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.t-cap {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Figures line up in columns and never jitter mid count-up. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ==========================================================================
+   Surfaces — opaque, flat, separated by a hairline rather than a shadow.
+   ========================================================================== */
+
+.card {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+}
+
+.group-list {
+  background: var(--surface);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.group-list > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.hairline {
+  border-color: var(--line);
+}
+
+/* A top-bar row. Fixed height so the header is the same size on every tab —
+   Habits shows a title where Daily shows a date stepper, and letting each
+   size itself made the whole page step down as you moved between them. */
+.bar-row {
+  height: var(--bar-h);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Interaction — a flat pressed state. No lift, no ripple, no scale bounce.
+   ========================================================================== */
+
+.press {
+  transition: background-color var(--dur-fast) linear;
+}
+.press:active {
+  background-color: var(--surface-3);
+}
+
+/* A disabled action greys out to a solid colour rather than fading on
+   opacity. Dimmed text is banned by the contrast rule, and on a dark surface
+   a half-transparent button reads as a rendering fault rather than a state.
+   !important because these buttons carry their colour as an inline style. */
+button:disabled {
+  background: var(--surface-3) !important;
+  color: var(--muted) !important;
+}
+
+/* ==========================================================================
+   Motion — every animation here is <=200ms, runs once, and communicates a
+   state change. There are no looping or idle animations by design.
+   ========================================================================== */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.animate-fade {
+  animation: fade-in var(--dur) var(--ease-out);
+}
+
+/* Bottom sheet sliding up. No overshoot — it is a panel, not a spring. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+.animate-sheet {
+  animation: sheet-up var(--dur-slow) var(--ease-out);
+}
+
+/* The lit top edge of the sheet. A bright hairline where the light catches
+   the rim, and a faint wash below it for thickness — shading, not
+   translucency, so it survived the removal of the glass underneath it.
+
+   Only the edge is dressed, not the body: the panel is full of text, and a
+   sheen across the middle of it would cost legibility for nothing. */
+.sheet-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.02) 12%,
+    transparent 26%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+/* Everything the sheet actually renders sits above that pane. */
+.sheet-glass > * {
+  position: relative;
+  z-index: 2;
+}
+/* Opaque, full stop. This was 82% transparent and relied on a backdrop-filter
+   to turn whatever was behind it into a wash; with the blur gone, the screen
+   underneath read straight through the panel and the sheet's own text sat on
+   top of it. A sheet covers what it covers. */
+.sheet-glass,
+.sheet-glass.lg-fallback {
+  background: var(--surface) !important;
+}
+
+/* ==========================================================================
+   Turbulence glass card — floats its own pane of glass over the sheet's
+   already-translucent one (currently just the habit detail card), asked for
+   as its own card rather than as the sheet's background.
+
+   ::before is the tint/inner-shadow layer and the content sits above it at
+   z-index 1. It used to also carry a blurred backdrop layer beneath both;
+   that went with the rest of the app's backdrop-filters, so the tint is now
+   the whole of it.
+   Recoloured onto this app's dark surface tokens rather than the reference's
+   bright-photo tuning, which on our near-black sheet would have read as a
+   fog rather than glass. */
+.glass-turb-card {
+  position: relative;
+  border-radius: var(--r-lg);
+  isolation: isolate;
+  box-shadow: 0 8px 28px -14px rgba(0, 0, 0, 0.55);
+}
+.glass-turb-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: var(--surface-2);
+  border: 1px solid color-mix(in srgb, #fff 12%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 14%, transparent);
+  pointer-events: none;
+}
+.glass-turb-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* The one habit that gets more than the others — a slow breathing glow
+   behind its extra row, the one purely decorative touch in an otherwise
+   stats-only addition. Colour comes from the habit's own `color`, painted
+   by the caller as an inline custom property, so it still follows
+   whatever colour that particular habit happens to have. */
+.habit-meditation-stats {
+  position: relative;
+  padding-top: 14px;
+  margin-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.habit-meditation-stats::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  width: 200px;
+  height: 120px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--habit-glow, var(--accent)) 22%, transparent), transparent);
+  filter: blur(18px);
+  pointer-events: none;
+  z-index: -1;
+  animation: habit-breathe 6s ease-in-out infinite;
+}
+@keyframes habit-breathe {
+  0%, 100% {
+    opacity: 0.55;
+    transform: translateX(-50%) scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .habit-meditation-stats::before {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+.habit-meditation-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+/* A popover menu springing up from the bar it is anchored to. */
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+.animate-menu {
+  animation: menu-in var(--dur-slow) var(--ease-out);
+  transform-origin: bottom right;
+}
+
+/* Full-screen pages (editor, search) coming in from the right. */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+.animate-slide {
+  animation: slide-in var(--dur-slow) var(--ease-out);
+}
+
+.skeleton {
+  background: var(--skel);
+  border-radius: var(--r-sm);
+}
+
+/* The calculator's wave divider — the one looping animation in the app, kept
+   deliberately. Two layers drift at different speeds so the join between the
+   paper display and the keypad reads as liquid with depth rather than one
+   sliding shape. Each path tiles every 300 units across a 1200-wide viewBox
+   and the track is twice as wide as the strip, so translating exactly -50%
+   returns to an identical position and the loop has no seam.
+
+   Transform-only, so it lives on the compositor and never repaints — and it
+   only exists while the keypad is open, not idling behind the whole app. */
+@keyframes wave-drift {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.wave-track {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 200%;
+  height: 100%;
+  will-change: transform;
+}
+.wave-back {
+  animation: wave-drift 19s linear infinite;
+}
+.wave-front {
+  animation: wave-drift 13s linear infinite reverse;
+}
+
+/* ==========================================================================
+   The deal slider's holographic finish.
+
+   A soft blue base with an iridescent sweep over it. The sheen is a single
+   wide conic gradient that the component slides horizontally as the rating
+   changes, so the colours shift the way a hologram does when you tilt it —
+   driven by the selection rather than idling on a timer.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------
+   The lit card in the entry editor.
+
+   Whichever of the three cards you are working in is marked by a tinted
+   border and one tone step of lift — nothing more.
+
+   This started as a travelling gradient ring with a wide bloom, matching
+   a reference image. Even softened right down it read as a hard edge
+   against the card's own corner radius, so it is gone: what the marker
+   is actually for is telling you where the keyboard is pointing, and a
+   border does that without competing with the numbers on the card.
+
+   Deliberately NOT inside @layer components. `.card` is unlayered, and
+   unlayered rules beat layered ones — from inside the layer the lit
+   border-color loses to `.card`'s plain border. `.holo` has the opposite
+   requirement (it must lose to Tailwind's `absolute`), which is why the
+   two live on either side of the layer boundary.
+   ------------------------------------------------------------------ */
+.focus-card {
+  position: relative;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out);
+}
+
+.focus-card.is-lit {
+  border-color: color-mix(in srgb, var(--lit, var(--accent)) 55%, var(--line));
+  background: var(--surface-2);
+  /* Static halo. A blurred copy of the rotating ring would look better and
+     would also mean re-blurring an animated gradient every frame, which is
+     exactly the kind of cost that started swallowing keystrokes last time.
+     A plain shadow costs nothing and reads as glow all the same. */
+  box-shadow: 0 0 22px -8px color-mix(in srgb, var(--lit, var(--accent)) 90%, transparent);
+}
+
+/* --------------------------------------------------------------
+   The rotating ring on the lit card.
+
+   A conic gradient whose start angle is animated. Plain custom properties
+   cannot be animated — the browser has no idea `--glow-a` is an angle and
+   just swaps one string for another — so it is registered with @property
+   first, which is what makes the sweep smooth rather than a 360-step jump.
+
+   The ring is a pseudo-element sized one and a half pixels larger than the
+   card, filled edge to edge with the gradient, then masked so only that
+   1.5px frame survives: two identical masks, one clipped to the content
+   box, composited so they cancel everywhere they overlap.
+
+   Only ever one of these on screen — it marks the card the keyboard is
+   pointing at, so a second one would be saying nothing.
+   -------------------------------------------------------------- */
+@property --glow-a {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes glow-spin {
+  to {
+    --glow-a: 360deg;
+  }
+}
+
+/* If the mask cannot be composited the ring would fill the whole card and
+   bury the fields underneath it, so it is only ever drawn where the
+   subtraction is known to work. Everything else keeps the tinted border. */
+@supports (mask-composite: exclude) or (-webkit-mask-composite: xor) {
+  .focus-card.is-lit::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(var(--r-md) + 2px);
+    padding: 2px;
+    /* Two crests, exactly opposite each other. One comet on its own leaves
+       three sides of the card dark for most of a turn, which reads as a
+       blinking edge rather than something rotating; a second crest 180deg
+       round means there is always light somewhere and the motion is
+       continuous. The warm peak inside each crest is the yellow from the
+       reference — it is what keeps the sweep from looking like a flat
+       coloured line sliding round. */
+    background: conic-gradient(
+      from var(--glow-a),
+      transparent 0deg,
+      color-mix(in srgb, var(--lit, var(--accent)) 55%, transparent) 18deg,
+      var(--lit, var(--accent)) 42deg,
+      color-mix(in srgb, #ffc46b 62%, var(--lit, var(--accent))) 58deg,
+      var(--lit, var(--accent)) 74deg,
+      color-mix(in srgb, var(--lit, var(--accent)) 55%, transparent) 100deg,
+      transparent 128deg,
+      transparent 180deg,
+      color-mix(in srgb, var(--lit, var(--accent)) 55%, transparent) 198deg,
+      var(--lit, var(--accent)) 222deg,
+      color-mix(in srgb, #ffc46b 62%, var(--lit, var(--accent))) 238deg,
+      var(--lit, var(--accent)) 254deg,
+      color-mix(in srgb, var(--lit, var(--accent)) 55%, transparent) 280deg,
+      transparent 308deg,
+      transparent 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    /* linear, never eased — any easing on a loop turns a steady rotation into
+       a pulse, which is the "hard motion" this is meant to avoid */
+    animation: glow-spin 3s linear infinite;
+    pointer-events: none;
+  }
+}
+
+@layer components {
+  .holo {
+    /* Inside @layer components on purpose.
+       Unlayered CSS beats every Tailwind utility regardless of specificity,
+       so an unlayered `position: relative` here silently overrode the
+       `absolute` the component sets — the element stopped filling its track
+       and collapsed to 2px tall, leaving a sliver of hologram instead of a
+       surface. Same trap as the `button { padding: 0 }` reset above. Layered,
+       the utility wins and `relative` is only the fallback. */
+    position: relative;
+    overflow: hidden;
+    /* A soft blue base with a second, off-axis wash over it. One flat
+       gradient read as a plain blue panel; two crossing at different angles
+       give the surface somewhere for the iridescence to sit. */
+    background:
+      radial-gradient(120% 160% at 15% -30%, rgba(120, 224, 255, 0.45), transparent 60%),
+      radial-gradient(120% 160% at 85% 130%, rgba(200, 109, 215, 0.4), transparent 60%),
+      linear-gradient(160deg, #4a7cbd 0%, #33609c 55%, #274a76 100%);
+  }
+
+  .holo::before {
+    content: '';
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    /* The iridescence: more stops, and a full wrap so no two neighbouring
+       bands are the same hue. A shorter list banded visibly once the sheen
+       was bright enough to see. */
+    background: conic-gradient(
+      from var(--holo-angle, 0deg),
+      rgba(120, 224, 255, 0.95),
+      rgba(125, 252, 205, 0.9),
+      rgba(226, 255, 150, 0.8),
+      rgba(255, 214, 137, 0.85),
+      rgba(255, 138, 205, 0.9),
+      rgba(196, 139, 250, 0.9),
+      rgba(120, 168, 255, 0.95),
+      rgba(120, 224, 255, 0.95)
+    );
+    filter: blur(9px) saturate(135%);
+    opacity: 0.92;
+    transform: translateX(var(--holo-shift, 0%));
+    transition:
+      transform var(--dur-slow) var(--ease-out),
+      opacity var(--dur) var(--ease-out);
+  }
+
+  /* The grating, plus a soft specular band that leans the opposite way to
+     the sheen — that crossing is what stops it reading as a flat rainbow. */
+  .holo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        76deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.32) 42%,
+        rgba(255, 255, 255, 0.05) 58%,
+        transparent 100%
+      ),
+      repeating-linear-gradient(
+        108deg,
+        rgba(255, 255, 255, 0.16) 0px,
+        rgba(255, 255, 255, 0.16) 1px,
+        transparent 1px,
+        transparent 5px
+      );
+    mix-blend-mode: overlay;
+  }
+
+  /* Content has to sit above both pseudo-elements. */
+  .holo > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* A calculator key: flat until touched, then it dips like a real membrane
+   button. The dip is 100ms — it confirms the press without slowing entry. */
+.calc-key {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md);
+  background: transparent;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) linear,
+    box-shadow var(--dur-fast) linear,
+    color var(--dur-fast) linear;
+}
+/* Applied, not pressed. The difference key (Love−) stays lit once it has
+   filled the field in, so the margin on screen is visibly computed rather
+   than typed, and un-lights the moment the number is changed by hand — the
+   camera-autofocus brackets (FocusCorners, in the component) carry the
+   shape of that, this carries the colour: the label switches from plain
+   white to a green gradient (not red — this isn't a loss indicator, just a
+   "this value was computed" one), with a hair of blur so it reads as
+   glowing rather than merely recoloured. Text-fill-color rather than a flat
+   `color` is what makes a two-stop gradient possible on inline text at all.
+   Declared before the held rule so an actual press still wins while it is
+   being touched: both selectors carry the same specificity, so order is
+   what decides. */
+.calc-key[data-lit] {
+  background-image: linear-gradient(135deg, var(--calc-lit-a) 0%, var(--calc-lit-b) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  filter: blur(0.4px);
+}
+
+/* The corner brackets themselves — see FocusCorners in Keypad.tsx. Sized
+   for a key, not react-bits' original 3rem sentence: smaller brackets,
+   tighter offset, and a glow in the same green as the lit label so the two
+   read as one effect. */
+.calc-focus-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.calc-corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--calc-lit-b);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--calc-lit-b) 70%, transparent));
+  border-radius: 2px;
+}
+.calc-corner.tl {
+  top: -5px;
+  left: -5px;
+  border-right: none;
+  border-bottom: none;
+}
+.calc-corner.tr {
+  top: -5px;
+  right: -5px;
+  border-left: none;
+  border-bottom: none;
+}
+.calc-corner.bl {
+  bottom: -5px;
+  left: -5px;
+  border-right: none;
+  border-top: none;
+}
+.calc-corner.br {
+  bottom: -5px;
+  right: -5px;
+  border-left: none;
+  border-top: none;
+}
+
+/* data-held is the real switch — set by pointer events in CalcKey because
+   :active doesn't reliably paint on a fast tap in the Android WebView this
+   runs in. :active stays alongside it for a mouse in the dev preview.
+
+   Three signals at once rather than one: the key sinks (transform), its fill
+   lightens (background), and a bright ring plus a full-white glyph light up
+   around it — a "soft" key like Love− dims its own text at rest, so pressed
+   has to actively brighten it rather than just easing off a scale that's
+   easy to miss at arm's length. color needs !important because CalcKey sets
+   it inline for the resting soft/warm dim, which otherwise wins over this. */
+.calc-key:active,
+.calc-key[data-held] {
+  transform: scale(0.92);
+  background-color: var(--calc-panel-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--calc-key) 55%, transparent);
+  color: var(--calc-key) !important;
+}
+
+/* The editable-expression caret in the calculator tape (Keypad.tsx). A real
+   <input> off-screen owns the actual selection/typing; this bar is purely the
+   on-screen paint of its position, re-keyed to a fresh element on every move
+   so the blink restarts solid at the new spot instead of picking up
+   mid-fade — the same "moved cursor is solid, then starts blinking" feel a
+   native caret has. steps(1) rather than a fade: a calculator digit is
+   crisp-edged, so the caret should snap rather than dissolve. */
+.calc-caret {
+  display: inline-block;
+  width: 2px;
+  height: 24px;
+  margin: 0 1px;
+  border-radius: 1px;
+  background: var(--calc-ink);
+  vertical-align: middle;
+  animation: calc-caret-blink 1s steps(1, jump-none) infinite;
+}
+@keyframes calc-caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Each entry fades up as the day's list arrives. Runs once, on mount, and the
+   stagger is capped so a busy day never leaves the last rows waiting. */
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.animate-row {
+  animation: row-in var(--dur-slow) var(--ease-out) both;
+}
+
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+.pb-content {
+  padding-bottom: var(--content-pb);
+}
+.pt-safe {
+  padding-top: var(--sat);
+}
+.pb-safe {
+  padding-bottom: var(--sab);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* The active card settles rather than just switching colour. One short pass,
+   no loop — motion that repeats on a form you look at all day becomes noise. */
+.focus-card.is-lit {
+  animation: card-settle 300ms var(--ease-out);
+}
+
+@keyframes card-settle {
+  from {
+    transform: scale(0.994);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* A habit tile acknowledging a tap. Was an anime.js `outElastic` tween; this
+   is the same shape (past its own size, then back) as a transform-only
+   keyframe the compositor can run on its own, with no library behind it.
+   Habits.tsx re-adds the class with a forced reflow so a second tap replays
+   it. */
+.habit-tile.is-tapped {
+  animation: habit-settle 420ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@keyframes habit-settle {
+  0% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .habit-tile.is-tapped {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Toast — a brief pill at the top of the screen (see components/Toast.tsx).
+   z-[70], above Confirm's z-60 and Sheet's z-50: a toast can legitimately
+   fire while either is open (saving a transaction closes its own sheet in
+   the same action) and must not be trapped behind the thing that triggered
+   it. `pointer-events: none` on the stack, `auto` on each toast, so an empty
+   stretch of the stack never intercepts a tap meant for whatever's under it.
+   ========================================================================== */
+
+.toast-stack {
+  position: fixed;
+  bottom: calc(var(--sab) + var(--nav-h) + 14px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  animation: toast-in 220ms var(--ease-out) both;
+}
+.toast[data-leaving] {
+  animation: toast-out 220ms var(--ease-out) both;
+}
+
+/* Colour carries the whole distinction — success/error read from the same
+   pill shape and position, not a different layout, so the icon and text tint
+   are what actually says which one this is. */
+.toast[data-kind='success'] {
+  color: #3fc77f;
+  border-color: color-mix(in srgb, #3fc77f 45%, var(--line));
+}
+.toast[data-kind='error'] {
+  color: var(--expense);
+  border-color: color-mix(in srgb, var(--expense) 45%, var(--line));
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+}
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: fade-in var(--dur) var(--ease-out);
+  }
+  .toast[data-leaving] {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   A–Z scrubber (AlphaIndex) — the rail down the right edge of a long list.
+
+   Opaque, hairline-separated, and only 28px wide so it costs the list almost
+   nothing. The letters are `flex: 1` inside `.alpha-list`, which is what lets
+   the component work out which letter is under a thumb by dividing the list's
+   height by the letter count — no per-letter measuring, and it keeps working
+   at any pane height.
+
+   Everything that moves here is transform-only and 90ms, and it only moves
+   while a finger is down.
+   ========================================================================== */
+
+.alpha-strip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 28px;
+  display: flex;
+  padding: 6px 0;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  /* the sheet underneath must not scroll while the rail is being scrubbed */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.alpha-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Transform and colour are written per frame by the component, so there is no
+   transition declared here — one would fight the finger. The ease back to
+   rest on release is applied inline at the moment of release instead. */
+.alpha-list > span {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--muted);
+  /* scaling from the right keeps the enlarged letters on the rail instead of
+     letting them drift off the screen edge */
+  transform-origin: center right;
+}
+
+/* Your thumb is on top of the rail, so the rail cannot be what tells you
+   which letter you are on. This can. It rides the finger's own Y rather than
+   the letter's slot, so it glides instead of stepping. */
+.alpha-bubble {
+  position: absolute;
+  top: 0;
+  right: 34px;
+  opacity: 0;
+  transform: translateY(0) translateY(-50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   The deal slider's popped-up label.
+
+   Sits clear of the finger, above the track, and is driven per frame by the
+   component — transform and nothing else, so it stays on the compositor while
+   it chases the drag. Opaque, like every other surface here: it lands on top
+   of whatever field is above it and has to stay readable doing so.
+   ========================================================================== */
+
+.deal-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px 6px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.8);
+  transform-origin: center bottom;
+  pointer-events: none;
+  /* only the fade is a transition — the movement is per-frame */
+  transition: opacity 130ms linear;
+}
+
+/* ==========================================================================
+   Habits — a drawn night sky, and opaque tiles over it.
+
+   The background is gradients and one small SVG rather than an image: a few
+   hundred bytes instead of a few hundred kilobytes, sharp at any screen size,
+   and every colour derives from --accent so it follows the accent setting
+   rather than being frozen to one red.
+
+   The tiles that sit on it are fully opaque, per the rule the whole rebuild
+   is built around. The colour in them is painted *inside* the tile over a
+   solid base, not achieved by letting the sky show through — which is what
+   keeps a streak number readable in daylight with a nebula behind it.
+   ========================================================================== */
+
+.habit-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    /* darkened top and bottom so headers and the nav bar meet something
+       calm, and so muted text further down still has contrast under it */
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.12) 34%, rgba(0, 0, 0, 0.66) 100%),
+    radial-gradient(72% 42% at 6% 80%, color-mix(in srgb, var(--accent) 92%, #000) 0%, transparent 62%),
+    radial-gradient(58% 32% at 80% 97%, color-mix(in srgb, var(--accent) 62%, #000) 0%, transparent 60%),
+    radial-gradient(64% 40% at 24% 6%, color-mix(in srgb, var(--accent) 22%, #000) 0%, transparent 66%),
+    #07080a;
+}
+
+/* The halftone. A plain dot grid, masked down to the nebula shapes so the
+   dots cluster where the colour is and thin out into the dark — which is what
+   makes it read as printed rather than as a screen-door texture. */
+.habit-sky::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--accent) 1px, transparent 1.35px);
+  background-size: 6px 6px;
+  opacity: 0.9;
+  -webkit-mask-image:
+    radial-gradient(66% 38% at 6% 80%, #000 12%, transparent 66%),
+    radial-gradient(52% 28% at 80% 97%, #000 0%, transparent 62%);
+  mask-image:
+    radial-gradient(66% 38% at 6% 80%, #000 12%, transparent 66%),
+    radial-gradient(52% 28% at 80% 97%, #000 0%, transparent 62%);
+}
+
+/* Sparse white dust over the whole sky, finer and much weaker than the
+   halftone so the two layers do not read as one grid. */
+.habit-sky::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0.6px, transparent 0.9px);
+  background-size: 23px 31px;
+  opacity: 0.5;
+}
+
+.habit-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: #fff;
+}
+
+/* -------------------------------- tiles -------------------------------- */
+
+.habit-tile {
+  position: relative;
+  /* Not clipped: the tick's particle burst has to be able to leave the tile.
+     The gradients are backgrounds, so the rounded corners still contain them
+     without needing overflow. */
+  overflow: visible;
+  border-radius: var(--r-lg);
+  padding: 12px 13px 11px;
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  /* Opaque throughout: the blobs are mixed *into* the surface colour rather
+     than laid over it at low alpha, so there is nothing to see through. */
+  background:
+    radial-gradient(118% 92% at 14% 6%, color-mix(in srgb, var(--c1) 60%, var(--surface)) 0%, transparent 62%),
+    radial-gradient(104% 84% at 92% 98%, color-mix(in srgb, var(--c2, var(--c1)) 42%, var(--surface)) 0%, transparent 66%),
+    var(--surface);
+}
+
+.habit-tile-wide {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 92px;
+}
+
+/* The whole tile is the target for opening a habit; the tick sits above it. */
+.habit-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.habit-tile-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Groups the optional icon with the name so `.habit-tile-head`'s
+   space-between still only has two things to split — the name (however it's
+   made up) on one side, the tick on the other — rather than spacing the
+   icon away from the name it belongs to. */
+.habit-tile-name-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.habit-tile-icon {
+  flex-shrink: 0;
+  display: flex;
+  opacity: 0.85;
+}
+.habit-tile-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.habit-big {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.habit-unit {
+  margin-left: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.habit-check {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1.5px solid var(--line-strong);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) linear;
+}
+.habit-check:active {
+  transform: scale(0.88);
+}
+.habit-check[data-done] {
+  color: #fff;
+  background: var(--c1);
+  border-color: color-mix(in srgb, #fff 45%, var(--c1));
+}
+
+/* Last fortnight. Reads at a glance as a rhythm rather than a number. */
+.habit-dots {
+  display: flex;
+  gap: 3px;
+  margin-top: 9px;
+  pointer-events: none;
+}
+.habit-dots > i {
+  flex: 1 1 0;
+  height: 5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+.habit-dots > i[data-on] {
+  background: var(--c1);
+}
+.habit-dots > i[data-today] {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 55%, transparent);
+}
+
+/* Progress as a ring. A conic gradient with a hard stop — no animation, it is
+   reporting a figure, not performing one. */
+.habit-ring {
+  position: relative;
+  flex-shrink: 0;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  background: conic-gradient(
+    #fff 0,
+    #fff var(--pct),
+    color-mix(in srgb, #fff 22%, transparent) var(--pct),
+    color-mix(in srgb, #fff 22%, transparent) 100%
+  );
+}
+.habit-ring::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 58%, var(--surface));
+}
+.habit-ring > span {
+  position: relative;
+}
+
+/* The mood card's own bits — a word rather than a number, so it borrows none
+   of habit-big's numeral sizing. */
+.habit-mood-label {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.habit-mood-note {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A plain gradient orb, no icon in it — nine words do not reduce to one
+   mouth shape, and trying would pull this back toward a five-point
+   good/bad scale, which is the thing being replaced. */
+/* ==========================================================================
+   Mood planets.
+
+   The nine moods were flat colour discs. They are bodies now: a lit sphere,
+   an atmosphere, and a surface marking that differs per mood — so the set
+   reads as a little solar system rather than a paint chart. The colour of
+   each is unchanged; only the rendering is.
+
+   Two sizes share the treatment — the 56px badge on the Mood tile and the
+   20px dot in the picker grid. The markings are scaled with `em` off each
+   one's own font-size so a single set of rules serves both.
+   ========================================================================== */
+
+.habit-mood-badge,
+.habit-mood-chip-dot {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  /* The light sits up and to the left on every one of them, so a grid of
+     moods looks lit by a single star rather than by nine. The second radial
+     is the terminator — what keeps it a sphere and not a flat disc. */
+  background:
+    radial-gradient(circle at 70% 76%, rgb(0 0 0 / 0.22) 0%, transparent 58%),
+    radial-gradient(
+      circle at 32% 28%,
+      color-mix(in srgb, #fff 62%, var(--mood-c)) 0%,
+      var(--mood-c) 58%,
+      color-mix(in srgb, var(--mood-c) 72%, #000) 100%
+    );
+  /* The atmosphere: two thin shells of the body's own colour. This is the
+     single detail that reads most as "planet" at any size. */
+  box-shadow:
+    0 0 0 0.14em color-mix(in srgb, var(--mood-c) 20%, transparent),
+    0 0 0 0.26em color-mix(in srgb, var(--mood-c) 9%, transparent),
+    0 0 0.7em 0.1em color-mix(in srgb, var(--mood-c) 26%, transparent);
+}
+
+/* The surface marking, clipped to the sphere. Each mood sets its own in the
+   block below; this just establishes the layer. */
+.habit-mood-badge::after,
+.habit-mood-chip-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  opacity: 0.45;
+}
+
+.habit-mood-badge {
+  z-index: 1;
+  width: 56px;
+  height: 56px;
+  font-size: 56px;
+  --mood-c: var(--c1);
+}
+.habit-mood-chip-dot {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  --mood-c: var(--c);
+}
+
+/* -- the nine surfaces --------------------------------------------------
+   Ordered the way the picker is: the good end of the vocabulary gets the
+   calmer, brighter faces and the hard end gets the stormier ones. */
+
+/* great — swirled, the liquid planet from the reference sheet */
+[data-mood='great']::after {
+  background:
+    radial-gradient(ellipse 68% 20% at 38% 34%, rgb(255 255 255 / 0.8) 0%, transparent 62%),
+    radial-gradient(ellipse 56% 16% at 62% 64%, rgb(255 255 255 / 0.6) 0%, transparent 64%);
+}
+/* successful — banded gas giant */
+[data-mood='successful']::after {
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 0.09em,
+    rgb(255 255 255 / 0.75) 0.09em 0.14em
+  );
+}
+/* productive — faceted, the hex planet */
+[data-mood='productive']::after {
+  background-image:
+    linear-gradient(30deg, transparent 46%, rgb(255 255 255 / 0.7) 47% 53%, transparent 54%),
+    linear-gradient(-30deg, transparent 46%, rgb(255 255 255 / 0.7) 47% 53%, transparent 54%);
+  background-size: 0.3em 0.3em;
+}
+/* calm — a single soft band, the quietest of them */
+[data-mood='calm']::after {
+  background: radial-gradient(ellipse 74% 16% at 50% 56%, rgb(255 255 255 / 0.75) 0%, transparent 70%);
+}
+/* okay — plain, cratered lightly. The unremarkable day. */
+[data-mood='okay']::after {
+  background:
+    radial-gradient(circle at 34% 62%, rgb(0 0 0 / 0.3) 0 0.06em, transparent 0.07em),
+    radial-gradient(circle at 62% 38%, rgb(0 0 0 / 0.26) 0 0.045em, transparent 0.055em);
+}
+/* tired — heavily cratered, a spent moon */
+[data-mood='tired']::after {
+  background:
+    radial-gradient(circle at 30% 34%, rgb(0 0 0 / 0.34) 0 0.075em, transparent 0.085em),
+    radial-gradient(circle at 62% 56%, rgb(0 0 0 / 0.3) 0 0.055em, transparent 0.065em),
+    radial-gradient(circle at 44% 74%, rgb(0 0 0 / 0.26) 0 0.04em, transparent 0.05em);
+}
+/* anxious — fine unsettled streaks */
+[data-mood='anxious']::after {
+  background: repeating-linear-gradient(
+    68deg,
+    transparent 0 0.05em,
+    rgb(255 255 255 / 0.6) 0.05em 0.08em
+  );
+}
+/* depressed — clouded over, the surface mostly hidden */
+[data-mood='depressed']::after {
+  background:
+    radial-gradient(ellipse 60% 30% at 36% 44%, rgb(255 255 255 / 0.5) 0%, transparent 72%),
+    radial-gradient(ellipse 52% 26% at 68% 66%, rgb(255 255 255 / 0.42) 0%, transparent 74%);
+  opacity: 0.6;
+}
+/* stressed — a storm, tight and off-centre */
+[data-mood='stressed']::after {
+  background:
+    radial-gradient(circle at 62% 40%, rgb(255 255 255 / 0.75) 0 0.07em, transparent 0.08em),
+    repeating-radial-gradient(
+      circle at 62% 40%,
+      transparent 0 0.09em,
+      rgb(255 255 255 / 0.4) 0.09em 0.12em
+    );
+}
+
+/* The mood vocabulary, laid out as a grid of named chips rather than a row
+   of icons — nine words need to be read, not guessed at from a shape. */
+.habit-mood-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.habit-mood-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  transition:
+    background-color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    color var(--dur-fast) linear,
+    transform var(--dur-fast) var(--ease-out);
+}
+.habit-mood-chip:active {
+  transform: scale(0.96);
+}
+/* Locked, the grid still shows which mood is on today — data-on keeps its
+   own colour — everything else just stops responding to a touch. */
+.habit-mood-chip:disabled {
+  opacity: 0.55;
+}
+.habit-mood-chip[data-on]:disabled {
+  opacity: 0.9;
+}
+.habit-mood-chip[data-on] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--c) 22%, var(--surface-2));
+  border-color: var(--c);
+}
+/* A wrapping pill row for the Search filters — the deal rating, colour-coded
+   the same as the slider it was picked on during entry. */
+.search-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  transition:
+    background-color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear,
+    color var(--dur-fast) linear;
+}
+.search-filter-chip[data-on] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--c) 22%, var(--bg));
+  border-color: var(--c);
+}
+.search-filter-chip-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, #fff 55%, var(--c)) 0%, var(--c) 72%);
+}
+
+/* The habit dial — an AC-thermostat-style arc gauge for habits that carry a
+   number (minutes meditated, pages read) instead of a plain tick. Optional
+   per habit, asked for once in the editor rather than forced on every one. */
+.habit-meter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.habit-meter-svg {
+  width: 100%;
+  max-width: 260px;
+  touch-action: none;
+}
+/* Edit, tucked into the corner of a habit's detail sheet — present for the
+   rare time it's wanted, but not sitting next to Mark done as if the two
+   were reached for equally often. */
+.habit-edit-tab {
+  position: absolute;
+  top: 2px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--muted);
+  opacity: 0.55;
+}
+.habit-edit-tab:active {
+  opacity: 1;
+  background: var(--surface-3);
+}
+
+.habit-meter-tick {
+  stroke: var(--line);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  transition: stroke var(--dur-fast) linear, opacity var(--dur-fast) linear;
+}
+.habit-meter-end {
+  font-size: 10px;
+  fill: var(--muted);
+}
+.habit-meter-mid {
+  margin-top: -34px;
+  text-align: center;
+}
+.habit-meter-value {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+.habit-meter-value small {
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.habit-meter-over {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.habit-meter-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  width: 100%;
+}
+.habit-meter-step {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.habit-meter-step:active {
+  transform: scale(0.94);
+}
+.habit-meter-exact,
+.habit-meter-exact-input {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  padding: 10px 8px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  color: var(--text-2);
+}
+.habit-meter-exact-input {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Vault — the lock screen and its summary card.
+
+   Its own identity, like Sleep and Last Done: a black ground with a dotted
+   texture over it, and one saturated gradient card carrying the whole look.
+   Fixed colours rather than --accent, because the card *is* the screen here.
+   ========================================================================== */
+
+/* The unlocked vault's own ground — one collage shared by all three inner
+   tabs, and by the header and bottom bar above and below them. Rendered by
+   the shell (VaultDreamBg in App.tsx) so it can span all three; the shell
+   root carries the z-index:0 that gives this something to be contained by. */
+.vault-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.vault-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  /* Sharp, deliberately — no filter here. Every other full-screen photo in
+     the app is blurred because something translucent sits over it; this one
+     is only ever seen through gaps between opaque rows, so blurring it would
+     cost the detail without buying any legibility. */
+}
+/* Darkened, but not blurred. This is the one thing the image genuinely needs:
+   its top half is near-white paper, and the section labels ("BANK ACCOUNTS",
+   "CARDS") are muted light-grey text sitting directly on it with no card
+   behind them — unreadable against the bare artwork. The wash is close to
+   even rather than a steep gradient, because those labels appear at every
+   scroll position, not just the top. */
+.vault-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 6, 10, 0.58) 0%,
+    rgba(8, 6, 10, 0.46) 45%,
+    rgba(8, 6, 10, 0.66) 100%
+  );
+}
+
+.vault-lock {
+  position: relative;
+  /* Without an explicit z-index, `position: relative` alone does not
+     establish a stacking context — .vault-photo-bg's negative z-index would
+     then escape past this element's own background entirely, painting
+     behind whatever real stacking context sits further up the tree instead
+     of behind this screen. Same reason the header uses z-20 rather than
+     leaving it auto. */
+  z-index: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #05050a;
+  --vlt-hot: #ff4fa3;
+  --vlt-mid: #a02a8f;
+  --vlt-deep: #35104f;
+}
+
+/* The pagoda watercolour behind the lock screen. The hero card and number
+   pad used to refract it; they are solid panels over it now. Same frame as
+   HeaderPhoenixBg: a plain img, cover-fit, given
+   depth by darkening rather than a hard crop, since here the photo is the
+   whole screen rather than just a header strip. */
+.vault-photo-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.vault-photo-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+}
+/* Darkest low in the frame, where the number pad's white glyphs sit right on
+   the photo with no card behind them — the top is already covered by the
+   hero card, so it barely needs the help. */
+.vault-photo-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 5, 10, 0.32) 0%,
+    rgba(5, 5, 10, 0.5) 45%,
+    rgba(5, 5, 10, 0.86) 100%
+  );
+}
+
+/* The dotted paper the reference lays everything on. A repeating radial is a
+   few bytes and stays crisp at any density; a tiled PNG would not. */
+.vault-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
+  background-size: 13px 13px;
+  mask-image: radial-gradient(120% 90% at 50% 30%, #000 0%, transparent 78%);
+}
+
+.vault-hero {
+  position: relative;
+  width: min(78vw, 300px);
+  padding: 22px 20px 0;
+  border-radius: 38px;
+  overflow: hidden;
+  text-align: center;
+  color: #fff;
+  /* Plain neutral dim, not a colour wash. This used to sit at 32% over a
+     blurred crop of the pagoda photo; without the blur it has to carry the
+     legibility of the PIN cells and label on its own. */
+  background: rgba(10, 6, 16, 0.88);
+  box-shadow: 0 18px 40px -22px rgb(0 0 0 / 0.9);
+  transition: box-shadow var(--dur) var(--ease-out);
+}
+/* A wrong PIN is the one moment this screen has to interrupt. */
+.vault-hero[data-error] {
+  box-shadow:
+    0 0 0 2px var(--expense),
+    0 0 60px -18px color-mix(in srgb, var(--expense) 70%, transparent);
+}
+
+.vault-hero-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+/* Four chunky cells rather than small dots — this is the readout of the card,
+   so it carries the weight the big number carries in the reference. */
+.vault-pin {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+}
+.vault-pin-cell {
+  width: 26px;
+  height: 34px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.22);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.vault-pin-cell[data-on] {
+  background: #fff;
+  box-shadow: 0 0 14px rgb(255 255 255 / 0.6);
+  transform: translateY(-2px);
+}
+
+.vault-hero-sub {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  min-height: 18px;
+}
+
+.vault-arcs {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding-bottom: 10px;
+}
+
+.vault-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  width: min(72vw, 268px);
+}
+.vault-key {
+  position: relative;
+  isolation: isolate;
+  height: 58px;
+  border-radius: 999px;
+  font-size: 21px;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(255 255 255 / 0.14);
+  border: 1px solid rgb(255 255 255 / 0.09);
+  /* A flat lifted tone. These carried a real SVG-refraction backdrop-filter
+     once — twelve of them on screen at a time, which is a large part of why
+     the pad was slow to come up on a real phone. */
+  transition: background var(--dur-fast) linear, transform var(--dur-fast) var(--ease-out);
+}
+.vault-key:active {
+  background: rgb(255 255 255 / 0.18);
+  transform: scale(0.94);
+}
+.vault-key[data-blank] {
+  background: transparent;
+  border-color: transparent;
+}
+
+
+/* ==========================================================================
+   Sleep — a night as a ring.
+
+   Twenty-four hours around, midnight at the top. The arc is the span asleep,
+   drawn in the accent so the shape itself reads as "this much of the day".
+   ========================================================================== */
+
+/* The palette, lifted from the gradient sheet he sent: near-white through
+   dawn pink and lavender, down into electric blue and a near-black navy.
+   Scoped to this screen — it is Sleep's identity, not the app's, the same way
+   Last Done owns its ink and Habits owns its sky.
+
+   These are fixed rather than derived from --accent, and the screen stays
+   dark in light mode: this is the one screen that is *about* night, and a
+   white sleep tracker would be the joke that tells itself. */
+/* Two ends of one night, straight off the palette sheet: purple where you go
+   to bed, sunrise where you get up. The dial reads left-to-right as the night
+   actually runs, which is why the two handles no longer need labels to say
+   which is which. */
+.sleep-screen {
+  --slp-1: #f2e6ee;
+  /* night */
+  --slp-night: #804a8a;
+  --slp-night-deep: #3a0353;
+  /* sunrise */
+  --slp-dawn: #f8d299;
+  --slp-dawn-warm: #f59e51;
+  /* grounds, taken down from the night purple so the screen is one hue */
+  --slp-deep: #240a35;
+  --slp-deeper: #10041c;
+  color: var(--slp-1);
+}
+
+/* Dusk at the top, deep night at the bottom. Two radial washes over a linear
+   ground rather than a single gradient, so the blue pools behind the dial
+   instead of banding straight down the screen. */
+.sleep-night {
+  position: absolute;
+  inset: 0;
+  background:
+    /* Purple pools behind the dial rather than at the very top, so the screen
+       starts on the same tone the header ends on and there is no seam across
+       the bar. Low and to the right, a thin warm band — the sunrise the wake
+       handle sits in, kept faint so the screen still reads as night. */
+    radial-gradient(72% 38% at 50% 27%, color-mix(in srgb, var(--slp-night) 62%, transparent) 0%, transparent 68%),
+    radial-gradient(66% 26% at 78% 92%, color-mix(in srgb, var(--slp-dawn-warm) 26%, transparent) 0%, transparent 72%),
+    linear-gradient(
+      180deg,
+      var(--slp-deep) 0%,
+      color-mix(in srgb, var(--slp-night) 30%, var(--slp-deep)) 32%,
+      var(--slp-deep) 74%,
+      var(--slp-deeper) 100%
+    );
+}
+
+/* The header's own sliver of night. Lives outside .sleep-screen — the header
+   sits above it in the DOM and switches ground colour on every tab — so the
+   palette is repeated here rather than shared through a custom property.
+   Negative z-index rather than DOM order: an absolutely positioned box with
+   no z-index paints *after* its static siblings regardless of where it sits
+   in the markup, which put the sky in front of the title until this was
+   set. */
+/* The header's own background image — see HeaderPhoenixBg in App.tsx. Same
+   negative-z-index trick as .sleep-tabhead-sky just below: an absolutely
+   positioned box with no z-index set would otherwise paint *after* its
+   static siblings regardless of DOM order, putting it in front of the title. */
+.header-phoenix-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+/* The scrim that makes the date, the title and the sub-tab row legible on
+   top of the photo.
+
+   This job used to be done by a blurred glass pane over the image, which
+   went with the rest of the app's backdrop-filters — and taking it away left
+   white text sitting directly on a bright, busy picture. A gradient does the
+   same work for the text without costing a compositing layer or a backdrop
+   read: darkest along the bottom, where the sub-tabs sit over the densest
+   part of every one of these crops, and lighter at the top where there is
+   only the title. The picture still reads; it just stops competing. */
+.header-phoenix-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 6, 14, 0.52) 0%,
+    rgba(8, 6, 14, 0.44) 38%,
+    rgba(8, 6, 14, 0.66) 100%
+  );
+}
+.header-phoenix-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Low in the frame — the dragon's head and the densest flame detail sit
+     there, which is the part worth having land under the sub-tab row
+     rather than cropped off. */
+  object-position: center 68%;
+  /* Fade the photo out at its own edges instead of ending it on a hard
+     rectangle. Full-bleed, the flames stopped dead at the bottom hairline
+     and drove straight into the two bottom screen corners as bright square
+     blocks — it read as a picture pasted over the bar rather than as the
+     bar's own ground. Two gradients intersected: the vertical one melts it
+     into the screen below, the horizontal one pulls it off the left and
+     right edges, and between them all four corners come away soft. */
+  -webkit-mask-image:
+    linear-gradient(to bottom, #000 0%, #000 46%, rgba(0, 0, 0, 0.35) 84%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to bottom, #000 0%, #000 46%, rgba(0, 0, 0, 0.35) 84%, transparent 100%),
+    linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%);
+  mask-composite: intersect;
+}
+/* Kitee's galaxy photo — same frame/fade as .header-phoenix-bg, just its
+   own crop. The swirl's brightest detail sits higher in the source image
+   than the phoenix's did, so this needs its own object-position rather
+   than inheriting 68% and cropping the interesting part away. */
+.header-galaxy-bg img {
+  object-position: center 30%;
+}
+/* Niba's blossom photo — the flowers sit low and to the right of the source
+   image, so the header crop is pulled down to catch them rather than
+   landing on the plainer misty mountains at the top. */
+.header-blossom-bg img {
+  object-position: center 78%;
+}
+
+/* Kitee's full screen, not just its header — the same photo run the whole
+   way down. Rows are opaque cards, so this only actually shows in the gaps
+   (search bar, section labels, whatever's left under a short list), but
+   those gaps are enough for the sky to read as the screen's real ground
+   rather than something bolted onto the header alone. */
+.kitee-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.kitee-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+  /* Softened deliberately: the rows sitting on top are opaque cards, so all
+     of this photo that is ever seen is the gaps between them, and a sharp
+     starfield there fights the prices. A `filter` on the image itself is a
+     one-off cost on a static picture — unlike a backdrop-filter, which would
+     re-read the backdrop for every element every frame. Scaled up so blur()'s
+     own edge softening — which pulls in
+     a paler, unblurred halo from just outside the element — stays cropped
+     off rather than showing as a visible rim around the screen. */
+  filter: blur(10px);
+  transform: scale(1.15);
+}
+/* Darkened toward the bottom rather than evenly — the top of the screen
+   sits right under the header's own crop of this image, so it stays bright
+   there to read as continuous; a flat dim over the whole photo would have
+   cut that continuity off at the header's bottom edge instead.
+
+   Purple rather than a neutral black — a black wash over a purple photo
+   desaturates it toward grey as it thickens, which is what was reading as
+   "black" lower down the screen even though the source image never has any
+   black in it. Deep violet (#1c0a3d, the same family as Sleep's own
+   --slp-deep) darkens the same way without pulling the colour out, so even
+   the 82%-covered bottom of the screen stays a dark purple instead of
+   fading to grey-black. */
+.kitee-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(28, 10, 61, 0.15) 0%,
+    rgba(28, 10, 61, 0.55) 40%,
+    rgba(20, 6, 46, 0.82) 100%
+  );
+}
+
+/* Niba's own full screen, same idea as .kitee-bg — the blossom photo runs
+   the whole way down rather than stopping at the header's bottom edge. Every
+   note card is its own opaque gradient tile, so this only actually shows in
+   the gaps: the date labels, the space between cards, whatever's left at the
+   bottom of a short day. z-index:0 on the wrapper is load-bearing, not
+   decoration — position:relative alone leaves z-index at auto, which does
+   not open a stacking context, so this layer's negative z-index would escape
+   past the wrapper's own background entirely instead of sitting behind it
+   (found the hard way on Vault's own photo). */
+.niba-screen {
+  position: relative;
+  z-index: 0;
+}
+.niba-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.niba-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The galaxy photo's two spiral cores sit roughly a third and two-thirds
+     down its own frame — centered vertically keeps a piece of each in view
+     on a cover-cropped phone screen rather than cutting toward one. */
+  object-position: center center;
+  /* Blurred so the cards sitting on top of it (opaque, not glass) stay the
+     thing actually being read — same plain filter-blur every full-screen
+     photo backdrop in the app uses (.kitee-bg, .vault-photo-bg). */
+  filter: blur(9px);
+  transform: scale(1.12);
+}
+/* Darkened toward the bottom rather than evenly, so the top stays bright
+   enough to read as continuous with the header's own sharp crop just above
+   it — the same asymmetric fade .kitee-bg::after uses. This photo is
+   already a deep purple rather than pale, so it can take a somewhat
+   stronger wash than the blossom photo could without going flat. */
+.niba-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 6, 14, 0.1) 0%,
+    rgba(8, 6, 14, 0.32) 45%,
+    rgba(8, 6, 14, 0.6) 100%
+  );
+}
+
+/* Kitee's item rows.
+
+   These were glass over the starfield — one backdrop-filter per row, each
+   with a blur, an SVG displacement pass and a saturate. Even "cheap" shared
+   filters are per-element work for the compositor, and this list puts as
+   many rows on screen as the catalogue has items: 26 live filters on the
+   seeded data alone, more on a real shop's list. That was the single
+   biggest cause of the app stalling, and it is why they are opaque now.
+
+   Tinted rather than fully see-through — this is a dense price list, and
+   every row carries a name, a supplier, a rate, so a pane doing nothing but
+   passing the photo straight through would cost more legibility than the
+   effect is worth. 46% still reads the name/rate at a glance (checked
+   against a 30% test pass, which stayed legible too, so this has real
+   headroom rather than sitting right at a legibility cliff) while actually
+   showing the starfield's shape move behind each row instead of just
+   tinting it, which 85%+ mostly didn't.
+
+   The tint itself is deep violet (#1c0a3d, matching .kitee-bg::after) now,
+   not var(--surface) — var(--surface) is this app's neutral near-black,
+   which is the right base for every other list but reads as a flat grey
+   smudge over a purple photo. Every row now stays in the same violet family
+   as the sky behind it instead of fighting it. */
+.kitee-row {
+  position: relative;
+  isolation: isolate;
+  background: var(--surface);
+  /* Pushed stronger than the first pass: more blur *and* more saturate, so
+     the colour that does show through reads richer rather than washed out
+     — a bigger blur alone just smears the same muted tone wider. */
+}
+
+/* One wrapper for both header rows, for the same reason Sleep's own sky
+   wrapper spans both: a title row and a sub-tab strip dressed differently
+   would read as a seam, not as one panel. The readability scrim over the
+   photo lives on .header-phoenix-bg::after.
+
+   paddingTop belongs here rather than on <header> — a phone's status-bar
+   inset is real height, and putting the padding on the header pushed this
+   box down below it, leaving the status-bar strip outside the wrapper
+   entirely. */
+.header-glass {
+  position: relative;
+  z-index: 0;
+  padding-top: var(--sat);
+}
+
+.sleep-tabhead-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.sleep-tabhead-glow {
+  position: absolute;
+  /* Pinned to the title row's own centre, not the whole sky's — the sky now
+     stretches down over the sub-tab strip too, and centring on its full
+     height would drag the moon down into the tab pills. */
+  top: calc(var(--bar-h) / 2);
+  right: 4px;
+  width: 84px;
+  height: 84px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(248, 210, 153, 0.35) 0%, transparent 70%);
+}
+.sleep-tabhead-moon {
+  position: absolute;
+  top: calc(var(--bar-h) / 2);
+  right: 22px;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff6e2 0%, #f8d299 55%, #f59e51 100%);
+  box-shadow: 0 0 12px rgba(248, 210, 153, 0.55);
+}
+.sleep-tabhead-moon::before,
+.sleep-tabhead-moon::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(245, 158, 81, 0.55);
+}
+.sleep-tabhead-moon::before {
+  width: 5px;
+  height: 5px;
+  top: 5px;
+  left: 6px;
+}
+.sleep-tabhead-moon::after {
+  width: 3.5px;
+  height: 3.5px;
+  top: 13px;
+  left: 14px;
+}
+.sleep-tabhead-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  animation: sleep-tabhead-twinkle 2.6s ease-in-out infinite;
+}
+@keyframes sleep-tabhead-twinkle {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sleep-tabhead-star {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+.sleep-tabhead-cloud {
+  position: absolute;
+}
+/* A slow sideways drift, so the sky is moving rather than painted on.
+
+   Animated on the independent `translate` property, not `transform`: both
+   cloud components set `transform: translate(-50%,-50%) scale(N)` inline
+   from their own props, and a `transform` keyframe would overwrite that and
+   fling the cloud off its position. `translate` composes ahead of it, so the
+   centring and the scale survive untouched.
+
+   Long, offset and `alternate` so no two drift together — twelve clouds
+   sliding in lockstep reads as the whole layer sliding, which is the one
+   thing it must not look like. Transform-only, so the compositor owns it. */
+@keyframes sleep-cloud-drift {
+  from {
+    translate: -7px 0;
+  }
+  to {
+    translate: 7px 0;
+  }
+}
+.sleep-tabhead-cloud,
+.sleep-field-cloud {
+  animation: sleep-cloud-drift 34s ease-in-out infinite alternate;
+}
+.sleep-tabhead-cloud:nth-child(3n),
+.sleep-field-cloud:nth-child(3n) {
+  animation-duration: 46s;
+  animation-delay: -12s;
+}
+.sleep-tabhead-cloud:nth-child(3n + 1),
+.sleep-field-cloud:nth-child(3n + 1) {
+  animation-duration: 27s;
+  animation-delay: -20s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sleep-tabhead-cloud,
+  .sleep-field-cloud {
+    animation: none;
+  }
+}
+
+/* The full screen's own scatter of stars, not just the header's sliver —
+   sits behind all the scrollable content, same twinkle as the header so the
+   two read as one sky rather than two different effects stacked on top of
+   each other. */
+.sleep-star-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.sleep-field-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+  animation: sleep-tabhead-twinkle 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sleep-field-star {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+.sleep-field-cloud {
+  position: absolute;
+}
+
+/* The bleed itself — lined up with the header moon's own position (right
+   side, near the top) so the glow reads as falling straight down from it
+   onto "Last night" rather than as a second, unrelated light. */
+.sleep-moonlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 190px;
+  background: radial-gradient(50% 100% at 84% 0%, rgba(248, 210, 153, 0.2) 0%, transparent 72%);
+  pointer-events: none;
+}
+
+/* The pencil/check corner mark itself — small and round rather than a
+   labelled pill, so the lock reads as a status mark next to the content
+   instead of a second control competing with it. Colour is plain
+   --muted/--accent rather than each screen's own tint: it is the same
+   action everywhere it appears, and should look like it regardless of
+   which screen it's on. */
+.lock-edit-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--muted) 22%, transparent);
+  transition: color var(--dur-fast) linear, background-color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear;
+}
+.lock-edit-btn[data-unlocked] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.sleep-dial {
+  position: relative;
+  width: min(78vw, 268px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+.sleep-dial-svg {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+/* Locked, the ring still shows tonight's shape — it just doesn't respond to
+   a touch, so the handles drop the "grab me" cursor and dim slightly rather
+   than disappearing (the whole point is still to read at a glance). */
+.sleep-dial[data-locked] .sleep-handle {
+  cursor: default;
+  opacity: 0.85;
+}
+.sleep-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--slp-1) 10%, transparent);
+  stroke-width: 20;
+}
+/* The scatter of stars sitting in the night hours of the ring. */
+.sleep-star {
+  fill: var(--slp-1);
+}
+/* Soft dawn clouds sitting in the morning hours of the ring — blurred so
+   they read as haze rather than as icons competing with the ticks. */
+.sleep-cloud {
+  fill: var(--slp-1);
+  filter: blur(0.6px);
+}
+.sleep-tick {
+  stroke: var(--slp-1);
+  stroke-width: 1;
+  opacity: 0.3;
+}
+.sleep-tick.is-quarter {
+  stroke-width: 1.8;
+  opacity: 0.6;
+}
+/* Lavender at the bedtime end, dawn pink at the wake end — the gradient is
+   pinned to the two handles in the SVG, so it turns with them. */
+.sleep-arc {
+  fill: none;
+  stroke: url(#sleepArcGrad);
+  stroke-width: 20;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--slp-night) 55%, transparent));
+}
+.sleep-handle {
+  filter: drop-shadow(0 2px 5px rgb(0 0 0 / 0.45));
+  cursor: grab;
+}
+
+.sleep-dial-mid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.sleep-dur {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.sleep-dur small {
+  font-size: 14px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--slp-1) 60%, transparent);
+}
+.sleep-dur-m {
+  margin-left: 6px;
+}
+.sleep-dial-cap {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--slp-1) 55%, transparent);
+}
+
+/* The two ends of the night, stated in numbers as well as handle positions —
+   a handle tells you roughly, these tell you exactly. */
+.sleep-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+/* Glass over the gradient rather than a solid card — a filled panel would
+   punch a hole in the night behind it. */
+.sleep-time {
+  position: relative;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--slp-1) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-1) 14%, transparent);
+}
+/* The real control — a native time input, invisible and stretched over the
+   whole card, so tapping anywhere on "Bedtime" or "Woke up" opens the
+   phone's own clock-face picker instead of the numbers being read-only. */
+.sleep-time-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+/* Disabled while the night is locked — the picker simply doesn't open, no
+   separate visual needed since the Edit button above already says so. */
+.sleep-time-input:disabled {
+  cursor: default;
+}
+.sleep-time-l {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--slp-1) 60%, transparent);
+  margin-bottom: 3px;
+}
+.sleep-time-v {
+  font-size: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one figure on the screen. No goal to be measured against — just what
+   the last seven nights came to. */
+.sleep-avg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 12px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--slp-1) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-1) 13%, transparent);
+}
+.sleep-avg-v {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.sleep-avg-l {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--slp-1) 58%, transparent);
+}
+
+/* The grid and the footnotes, restated for the dark ground — the shared
+   Last Done rules read from --surface/--line, which do not exist here. */
+.sleep-cal {
+  background: color-mix(in srgb, var(--slp-deeper) 55%, transparent);
+  border-color: color-mix(in srgb, var(--slp-1) 12%, transparent);
+}
+.sleep-cal .ld-months {
+  color: color-mix(in srgb, var(--slp-1) 55%, transparent);
+}
+.sleep-cal .ld-week > i {
+  background: color-mix(in srgb, var(--slp-1) 9%, transparent);
+}
+.sleep-cal .ld-week > i[data-future] {
+  background: transparent;
+}
+.sleep-cal .ld-week > i[data-today] {
+  box-shadow: 0 0 0 1.5px var(--slp-dawn);
+}
+
+.sleep-remove {
+  width: 100%;
+  padding: 12px 0;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  color: var(--slp-dawn);
+  background: color-mix(in srgb, var(--slp-1) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-dawn) 22%, transparent);
+}
+
+/* Nights with nothing recorded are flat; the more sleep, the more of the
+   habit-grid square is filled in. Tonight is outlined rather than shaded —
+   it has not happened yet, and drawing it as a miss would be a lie. */
+.sleep-grid-pending {
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+  background: transparent !important;
+}
+
+/* ==========================================================================
+   Last Done — ink on a dark ground, with vivid cards on top.
+
+   Started as cream paper with black ink, straight from the reference. On the
+   phone it was the only bright screen in a dark app and it read as a mistake,
+   so the values are inverted: near-black ground, pale ink, blossoms and tassel
+   still in the accent. Same drawing, same composition, and it now takes both
+   of its tones from variables so a light theme can flip them back.
+   ========================================================================== */
+
+.ink-paper {
+  --ink-ground: #08090b;
+  --ink-line: #cfd4dc;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--ink-ground);
+}
+
+/* Light theme puts the drawing back the way the reference had it. */
+.light .ink-paper {
+  --ink-ground: #f2ede2;
+  --ink-line: #16130f;
+}
+
+.ink-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* -------------------------------- cards -------------------------------- */
+
+/* A dark panel that makes its own light, rather than a coloured block.
+   The colour now arrives as a bloom behind the readout — which is what lets
+   the dot-matrix number read as lit hardware instead of as text on a tile. */
+.chore-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 26px;
+  padding: 13px 15px 11px;
+  margin-bottom: 16px;
+  color: #fff;
+  background: #08080b;
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  /* The halo is the card's own colour thrown onto the background behind it.
+     It breathes, slowly — this is the only motion on the screen and it should
+     read as the card being lit, not as something demanding attention. */
+  box-shadow:
+    0 0 34px -6px color-mix(in srgb, var(--c) 42%, transparent),
+    0 10px 26px -14px rgba(0, 0, 0, 0.9);
+  animation: chore-breathe 5.2s ease-in-out infinite alternate;
+}
+
+@keyframes chore-breathe {
+  to {
+    box-shadow:
+      0 0 52px -2px color-mix(in srgb, var(--c) 60%, transparent),
+      0 10px 26px -14px rgba(0, 0, 0, 0.9);
+  }
+}
+
+/* The bloom itself, clipped to the card. Sat low and left so it rises behind
+   the number rather than washing the name at the top, which has to stay
+   readable at small size. */
+.chore-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 78% at 16% 82%, color-mix(in srgb, var(--c) 92%, transparent) 0%, transparent 72%),
+    radial-gradient(54% 60% at 94% 6%, color-mix(in srgb, var(--c) 55%, transparent) 0%, transparent 70%),
+    radial-gradient(140% 100% at 50% 128%, color-mix(in srgb, var(--c) 38%, transparent) 0%, transparent 74%);
+}
+
+/* A thin lit rim. On the old coloured tile this was white, reading as gloss;
+   on a dark panel it takes the card's colour instead, so the edge looks like
+   it is catching the light the card itself is giving off. */
+.chore-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--c) 75%, #fff) 0%,
+    transparent 46%,
+    color-mix(in srgb, #000 40%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.chore-tile.is-overdue {
+  /* Nothing subtle: an overdue job is the only thing on this screen that
+     needs to interrupt you, so it stops breathing and holds a hard amber
+     ring instead. A pulsing warning is easier to ignore than a fixed one. */
+  animation: none;
+  box-shadow:
+    0 0 0 2px #ffd166,
+    0 0 40px -6px rgba(255, 209, 102, 0.5),
+    0 10px 26px -14px rgba(0, 0, 0, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chore-tile {
+    animation: none;
+  }
+}
+
+.chore-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.chore-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.chore-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chore-meta {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.chore-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+/* Holds the dot-matrix readout and its unit. Aligned on the bottom edge
+   rather than a baseline — the SVG has no baseline to share. */
+.chore-big {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  pointer-events: none;
+}
+/* The lit dots throw a little light of their own, which is most of what
+   sells them as a panel rather than a pattern. Kept tight — at a wider blur
+   the halos of neighbouring dots merge and the number stops being readable,
+   which is the one thing this element exists to be. */
+.chore-big svg {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent));
+}
+
+.chore-unit {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chore-do {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a1a;
+  background: #fff;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.chore-do:active {
+  transform: scale(0.93);
+}
+/* The done state is a statement, not a dead control — so it keeps its
+   contrast instead of falling to the global disabled grey. */
+.chore-do[data-done],
+.chore-do:disabled {
+  background: rgba(255, 255, 255, 0.28) !important;
+  color: #fff !important;
+}
+
+/* The wait, as a strip. Unlit ticks are left in place for the same reason the
+   dot matrix keeps its dark dots: the empty part is what tells you how much
+   of the interval is still to run. */
+.chore-ticks {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  margin-top: 11px;
+  height: 12px;
+  pointer-events: none;
+}
+.chore-ticks > i {
+  flex: 1;
+  height: 6px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: height var(--dur) var(--ease-out);
+}
+/* No glow on the lit ticks, and no white.
+   Every tick used to be a bright bar with a halo behind it, and since most
+   jobs on this screen are overdue at any one time, that was five glowing gold
+   strips competing with the numbers they were meant to support. The height
+   difference already says which ticks are lit — the colour only has to be
+   legible, not loud. */
+.chore-ticks > i[data-on] {
+  height: 12px;
+  background: color-mix(in srgb, var(--c) 62%, transparent);
+}
+/* Past the deadline the whole strip is lit, so it shifts amber with the rest
+   of the overdue signalling — dimmed well down, because a full strip is a lot
+   of colour at once and the card already has a ring saying the same thing. */
+.is-overdue .chore-ticks > i[data-on] {
+  background: rgba(255, 209, 102, 0.42);
+}
+
+.chore-foot {
+  position: relative;
+  z-index: 1;
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+.chore-foot b {
+  color: #ffd166;
+}
+
+/* ==========================================================================
+   Transient effects — ripple, particle burst, confetti.
+
+   Every one of these is spawned by lib/fx.ts, animates once and removes
+   itself. They are transform+opacity only, so they run on the compositor and
+   never lay the page out again mid-flight.
+   ========================================================================== */
+
+@keyframes fx-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.32;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.fx-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  pointer-events: none;
+  /* scaled from the centre of its own box, which is why fx.ts positions it
+     at (point - radius) rather than at the point itself */
+  transform: scale(0);
+  animation: fx-ripple 600ms var(--ease-out) forwards;
+}
+
+/* A host that wants ripples has to clip them and own a stacking context. */
+.fx-host {
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes fx-particle {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0);
+    opacity: 0;
+  }
+}
+
+.fx-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  animation: fx-particle 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fx-confetti {
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.fx-confetti {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 3;
+  animation: fx-confetti 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* The burst has to escape the button it fires from, so that button cannot be
+   the thing clipping ripples. Kept separate from .fx-host on purpose. */
+.fx-emit {
+  position: relative;
+  overflow: visible;
+}
+
+/* The habit tick, as a heart.
+   Outline while undone, filled and popped once done. The pop overshoots to
+   ~1.35 and settles, which is what makes it feel like a reaction rather than
+   a state change. It runs once, on the transition into done. */
+.habit-heart {
+  fill: none;
+  transition: fill var(--dur-fast) linear;
+}
+.habit-heart[data-done] {
+  fill: currentColor;
+  animation: heart-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* CopyField's clipboard glyph, popping in on every mount — which is every
+   tap, since ClipboardIcon/ClipboardCheckIcon are two separate components
+   swapped by conditional rendering rather than one icon toggling a prop (see
+   the comment at their definition). A small overshoot-and-settle, the same
+   feel as the habit heart above just quicker, since this sits inline in a
+   dense field row rather than as its own tap target. */
+.copy-icon {
+  animation: copy-icon-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes copy-icon-pop {
+  0% {
+    transform: scale(0) rotate(-8deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.2) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .copy-icon {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   The transaction row's fold-out actions, and the hold-to-delete ring.
+   ========================================================================== */
+
+/* max-height rather than height, because the panel's real height is not known
+   until it is laid out. The open value is generously larger than the content
+   and the easing is heavily front-loaded, so the extra distance is covered in
+   the last few milliseconds and never reads as a pause at the end. */
+.tx-fold {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tx-fold.open {
+  max-height: 96px;
+}
+
+.tx-fold-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  background: var(--surface-2);
+  border-top: 1.5px solid var(--line);
+}
+
+.tx-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tx-act:active {
+  background: var(--line-strong);
+}
+
+/* Turns over as the panel opens. Springy on the way, because the chevron is
+   the one part of this that is purely a signal — it can afford the character. */
+.tx-chev {
+  transform: rotate(180deg);
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -------------------------- hold to confirm -------------------------- */
+
+.hold-confirm {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  touch-action: none;
+  color: var(--hold);
+}
+
+.hold-confirm svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg); /* start the sweep at twelve o'clock */
+}
+
+.hold-track {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+}
+
+.hold-ring {
+  fill: none;
+  stroke: var(--hold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* The ring only animates while a finger is down. Letting go removes the
+   class, the animation is dropped, and the dashoffset falls straight back to
+   its full value — the snap back is the absence of a transition, not another
+   animation. */
+.hold-confirm[data-holding] .hold-ring {
+  animation: hold-sweep 800ms linear forwards;
+}
+
+@keyframes hold-sweep {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hold-confirm[data-done] {
+  color: var(--income);
+}
+.hold-confirm[data-done] .hold-ring {
+  stroke: var(--income);
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.hold-glyph {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.hold-confirm[data-holding] .hold-glyph {
+  transform: scale(0.82);
+}
+.hold-confirm[data-done] .hold-glyph {
+  transform: scale(1.15);
+}
+
+/* ==========================================================================
+   Password list — each entry is a lit tile, not a grey row.
+
+   The card is two zones, and the split is the whole idea. The top is a
+   *bloom*: a full-bleed gradient mesh in that entry's own two colours, with
+   a texture woven through it and the name sitting on top in white. The
+   bottom is deliberately quiet — plain surface, no tint — because the
+   dot-masked password and the Copy buttons have to stay readable, and a
+   saturated wash behind them would win that fight every time. All the
+   boldness is spent in the bloom; none of it is spent where it would cost
+   legibility.
+
+   Four things vary per entry, every one of them derived from a hash of the
+   title (see PW_TONES / blobFor / textureFor / bloomFor in
+   Authentication.tsx) so a card looks identical every time it renders:
+
+     --pw-a / --pw-b   the two gradient colours
+     data-blob         where the light sources sit inside the bloom
+     data-tex          which texture is woven through it
+     data-bloom        how tall the bloom is
+
+   That last one is what actually stops the list reading as rigid: cards
+   don't just recolour, they change proportion. A run of them has tall lush
+   headers next to slim bands, the way the reference tiles have genuinely
+   different shapes rather than one shape in different colours.
+   ========================================================================== */
+
+.pw-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--surface);
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--pw-a, var(--line)) 24%, var(--line));
+  /* The tile reads as *lit* rather than drawn — its own colour spilling a
+     little onto the dark ground under it. Tight and low-alpha so three in a
+     row don't turn the page into a haze. */
+  box-shadow: 0 6px 20px -10px color-mix(in srgb, var(--pw-a, transparent) 55%, transparent);
+}
+
+/* ---- the bloom ---- */
+
+.pw-bloom {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 9px 14px;
+  /* Two light sources over a dark base. The base matters: without it the
+     mesh washes out to pastel against --surface and loses the depth the
+     reference tiles get from glowing *out of* black. */
+  background:
+    radial-gradient(62% 96% at 80% 16%, var(--pw-a) 0%, transparent 62%),
+    radial-gradient(58% 88% at 16% 88%, var(--pw-b) 0%, transparent 60%),
+    linear-gradient(142deg, color-mix(in srgb, var(--pw-b) 42%, #0a0a11), color-mix(in srgb, var(--pw-a) 24%, #0a0a11));
+}
+/* Light sources rearranged — the same mesh lit from somewhere else. */
+.pw-bloom[data-blob='b'] {
+  background:
+    radial-gradient(58% 92% at 14% 20%, var(--pw-a) 0%, transparent 60%),
+    radial-gradient(66% 80% at 88% 78%, var(--pw-b) 0%, transparent 64%),
+    linear-gradient(122deg, color-mix(in srgb, var(--pw-a) 38%, #0a0a11), color-mix(in srgb, var(--pw-b) 26%, #0a0a11));
+}
+/* Symmetric double — the one arrangement that reads as centred rather than
+   directional, so a run of cards isn't uniformly raked one way. */
+.pw-bloom[data-blob='c'] {
+  background:
+    radial-gradient(42% 78% at 22% 50%, var(--pw-a) 0%, transparent 64%),
+    radial-gradient(42% 78% at 78% 50%, var(--pw-a) 0%, transparent 64%),
+    radial-gradient(70% 60% at 50% 108%, var(--pw-b) 0%, transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--pw-b) 30%, #0a0a11), color-mix(in srgb, var(--pw-a) 22%, #0a0a11));
+}
+.pw-bloom[data-blob='d'] {
+  background:
+    radial-gradient(72% 70% at 50% 104%, var(--pw-a) 0%, transparent 60%),
+    radial-gradient(50% 74% at 84% 6%, var(--pw-b) 0%, transparent 58%),
+    linear-gradient(200deg, color-mix(in srgb, var(--pw-a) 34%, #0a0a11), color-mix(in srgb, var(--pw-b) 28%, #0a0a11));
+}
+
+/* Bloom height — the proportion change, kept subtle now that the row is
+   just an avatar and one line of text. A first pass measured 22/36px of
+   padding on top of that single line as "thick" against a list meant to be
+   scanned fast, not admired — this list's job is finding a login in one
+   glance, not being a gallery of tiles. The steps are still real (a `tall`
+   card is visibly taller than a `slim` one) but shallow enough that no
+   variant reads as bloated. */
+.pw-bloom[data-bloom='slim'] {
+  padding-top: 7px;
+  padding-bottom: 6px;
+}
+.pw-bloom[data-bloom='tall'] {
+  padding-top: 12px;
+  padding-bottom: 14px;
+}
+
+/* ---- texture ----
+   Woven through the mesh rather than laid flat on it: masked to fade out
+   toward the bottom so it never reaches the edge where the body zone
+   starts, which is what keeps it reading as depth instead of wallpaper. */
+.pw-bloom::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(190deg, #000 0%, transparent 82%);
+  mask-image: linear-gradient(190deg, #000 0%, transparent 82%);
+}
+/* graph paper */
+.pw-bloom[data-tex='grid']::after {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 13px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 1px, transparent 1px 13px);
+}
+/* shutter bars */
+.pw-bloom[data-tex='bars']::after {
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 2px, transparent 2px 15px);
+  opacity: 0.42;
+}
+/* diagonal weave */
+.pw-bloom[data-tex='weave']::after {
+  background:
+    repeating-linear-gradient(48deg, rgba(255, 255, 255, 0.15) 0 1px, transparent 1px 11px),
+    repeating-linear-gradient(-48deg, rgba(255, 255, 255, 0.09) 0 1px, transparent 1px 11px);
+}
+/* dot matrix */
+.pw-bloom[data-tex='dots']::after {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.26) 1px, transparent 1.3px);
+  background-size: 11px 11px;
+}
+
+/* ---- content sitting on the bloom ---- */
+
+.pw-bloom-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.pw-bloom-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+  /* The mesh runs bright in places and near-black in others, so the name
+     carries its own shadow rather than relying on the backdrop behind any
+     one card being dark enough. */
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+}
+
+/* Frosted rather than a solid disc: a filled circle in the entry's own
+   colour would sit invisibly against a mesh made of that same colour. Sized
+   down from the original 38px now that the bloom is one line, not two — a
+   38px disc was scaled for sitting next to a title-plus-subtitle stack. */
+.pw-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.17);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    0 2px 10px rgba(0, 0, 0, 0.28);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- the quiet half ---- */
+
+.pw-body {
+  padding: 9px 14px 11px;
+}
+
+/* ==========================================================================
+   Niba — notes as gradient cards. The tone cycles by position in the list
+   rather than by anything about the note itself, purely so a run of cards
+   reads as a set rather than a stack of identical grey boxes.
+   ========================================================================== */
+
+.niba-card {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 16px 44px 16px 16px;
+  border-radius: var(--r-md);
+  color: #fff;
+}
+.niba-card[data-tone='0'] {
+  background: linear-gradient(155deg, #f4a4c0 0%, #e8799f 100%);
+}
+.niba-card[data-tone='1'] {
+  background: linear-gradient(155deg, #b07dd6 0%, #8a5ec4 100%);
+}
+.niba-card[data-tone='2'] {
+  background: linear-gradient(155deg, #7c7ce0 0%, #5a56c9 100%);
+}
+.niba-card[data-tone='3'] {
+  background: linear-gradient(155deg, #5f5aa8 0%, #423c82 100%);
+}
+
+.niba-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.niba-card-body {
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-wrap;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.niba-star {
+  position: absolute;
+  top: 14px;
+  right: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  transition:
+    color var(--dur-fast) linear,
+    transform var(--dur-fast) var(--ease-out);
+}
+.niba-star[data-on] {
+  color: #ffd85e;
+}
+.niba-star:active {
+  transform: scale(0.85);
+}
+
+/* ==========================================================================
+   Planner — today's tasks, bucketed into Morning/Afternoon/Evening. Sits
+   directly on the Niba page, above the notes list (see PlannerSection in
+   screens/Planner.tsx and its mount point in NoteView, Trans.tsx) — a
+   foldable section using the same .fold-row header as Kitee's categories and
+   Documents' groups, not a separate button-and-sheet elsewhere.
+   ========================================================================== */
+
+.planner-inline-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 20px 14px;
+}
+.planner-date {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.planner-autoplan {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #8b6df0));
+}
+.planner-autoplan:disabled {
+  opacity: 0.4;
+}
+
+.planner-summary {
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.planner-block {
+  margin: 0 20px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.planner-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.planner-block-glyph {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  background: var(--surface-3);
+}
+.planner-block-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.planner-block-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.planner-block-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--muted);
+  background: var(--surface-3);
+}
+
+.planner-rows {
+  list-style: none;
+}
+/* Reorder.Item renders a plain <li> by default and takes over `position`
+   while a row is actively being dragged — background/border live here
+   rather than relying on the parent's, so a lifted row still reads as a
+   complete card instead of see-through while it's above its neighbours. */
+.planner-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  cursor: grab;
+}
+.planner-row:active {
+  cursor: grabbing;
+}
+
+.planner-check {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--dur-fast) linear, border-color var(--dur-fast) linear;
+}
+.planner-check[data-done] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.planner-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.planner-row-body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.planner-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planner-row-title[data-done] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.planner-row-sub {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-drag {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.planner-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 11px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+/* ==========================================================================
+   Documents — a photo grid grouped by who each ID/document belongs to.
+   ========================================================================== */
+
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 12px 8px;
+}
+
+.doc-thumb {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.doc-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.doc-thumb-pdf {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.doc-thumb-pdf span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.doc-thumb-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px 5px;
+  font-size: 11px;
+  color: #fff;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
+}
+/* Top-left rather than sharing the top-right corner with .doc-thumb-check —
+   that badge only appears in select mode, but a page count is worth showing
+   all the time, so the two need their own corners rather than one having to
+   yield to the other. */
+.doc-thumb-pages {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+/* Mirrors the page-count badge's own corner (top-right instead of top-left,
+   so the two never collide on a multi-page PDF) — flags a rendered PDF page
+   as what it is, since a rasterised scan otherwise looks exactly like any
+   other photo in the grid. */
+.doc-thumb-pdf-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.doc-thumb-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.25);
+  transition:
+    background-color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear;
+}
+.doc-thumb-check[data-on] {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.doc-thumb-check[data-on]::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.doc-select-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--sab) + var(--nav-h) + 12px);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.doc-select-action {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 6px 10px;
+}
+
+.doc-editor-pick {
+  width: 100%;
+  padding: 28px 0;
+  border-radius: var(--r-md);
+  border: 1.5px dashed var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+.doc-editor-photo {
+  width: 100%;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.doc-editor-photo img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  background: var(--bg);
+  display: block;
+}
+/* A PDF has no image to preview inline — WebView has no built-in PDF
+   renderer to draw it with — so this stands in for the thumbnail. */
+.doc-editor-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Both of these used to fill the whole viewer (flex: 1 against a flex
+   parent) back when a document was ever exactly one image. A document can be
+   several pages now, stacked and scrolling — `flex: 1` and `min-height: 0`
+   are harmless leftovers rather than load-bearing here (the scroll wrapper
+   they sit in is not itself a flex container, so neither declaration does
+   anything), kept only because removing them buys nothing: each page still
+   renders at its own natural size either way. */
+.doc-viewer-photo {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  object-fit: contain;
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+.doc-viewer-pdf {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
+}
+
+/* A document's freeform notes, read-only in the viewer — sits below the
+   page(s) and above the Delete/Edit/Share row, its own block rather than
+   folded into the category/page-count line above the pages so a longer note
+   has somewhere to wrap without crowding that line. */
+.doc-viewer-notes {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Checklist — a shopping-list-style set of ticks inside a note, on the
+   editor sheet and, in miniature, on the note's own gradient card.
+   ========================================================================== */
+
+.chk-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  background: transparent;
+  transition:
+    background-color var(--dur-fast) linear,
+    border-color var(--dur-fast) linear;
+}
+.chk-box[data-on] {
+  background: var(--accent);
+  border-color: var(--accent);
+  position: relative;
+}
+.chk-box[data-on]::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.niba-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.niba-check-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.niba-check-item .chk-box {
+  border-color: rgba(255, 255, 255, 0.6);
+  width: 15px;
+  height: 15px;
+}
+.niba-check-item .chk-box[data-on] {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+.niba-check-item .chk-box[data-on]::after {
+  border-color: var(--slp-deep, #240a35);
+  left: 4px;
+  top: 1.5px;
+  width: 4px;
+  height: 7px;
+}
+.niba-check-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.niba-check-text[data-done] {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: line-through;
+}
+.niba-check-more {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  padding-left: 22px;
+}
+
+/* ==========================================================================
+   Card vault entries — a real-looking card face instead of a label/value
+   list, both in the New/Edit sheet (live, as the fields are typed) and in
+   the vault's own list (masked, one tile per saved card).
+   ========================================================================== */
+
+/* Three colour stops per tone, laid down as overlapping radial washes —
+   a saturated printed-plastic face rather than the frosted dark glass this
+   started as. The reference card is *colour first*: the ink sits on top of
+   a bright gradient, not behind a smoked pane. */
+.cc-card {
+  --cc-a: #e0519a;
+  --cc-b: #f0864f;
+  --cc-c: #6a4bc4;
+  position: relative;
+  aspect-ratio: 1.6 / 1;
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #fff;
+  overflow: hidden;
+  /* Deliberately not painted here — ::before carries the whole face. See the
+     note on ::before. */
+  background: transparent;
+  isolation: isolate;
+  box-shadow: 0 14px 30px -14px rgba(0, 0, 0, 0.6);
+}
+.cc-card[data-tone='0'] {
+  --cc-a: #e0519a;
+  --cc-b: #f0864f;
+  --cc-c: #6a4bc4;
+}
+.cc-card[data-tone='1'] {
+  --cc-a: #a06ae8;
+  --cc-b: #e05fac;
+  --cc-c: #3f2a86;
+}
+.cc-card[data-tone='2'] {
+  --cc-a: #f0656f;
+  --cc-b: #f2a24e;
+  --cc-c: #8e2f5e;
+}
+.cc-card[data-tone='3'] {
+  --cc-a: #35d6a0;
+  --cc-b: #4bc0e0;
+  --cc-c: #1a5f7a;
+}
+.cc-card[data-tone='4'] {
+  --cc-a: #f2708a;
+  --cc-b: #f0b04f;
+  --cc-c: #7a2f6a;
+}
+.cc-card[data-tone='5'] {
+  --cc-a: #5f8ae8;
+  --cc-b: #9a6ae0;
+  --cc-c: #23286b;
+}
+/* The gradient itself. Blurred generously so the three washes melt into one
+   another rather than reading as three distinct blobs. */
+.cc-card::before {
+  content: '';
+  position: absolute;
+  /* Bled past the card's rim on purpose. The glass pane above displaces this
+     by up to ~16px, and where the pane's edge met the gradient's edge the
+     displacement had nothing left to sample and pulled the dark page in
+     instead — a black smudge in whichever corner the turbulence happened to
+     push outward hardest. Giving the gradient a margin wider than the
+     displacement means every sample lands on real colour. overflow:hidden on
+     the card clips the surplus, so none of it is visible directly. */
+  inset: -24px;
+  background-color: var(--cc-c);
+  background-image:
+    radial-gradient(120% 90% at 18% 8%, var(--cc-a) 0%, transparent 55%),
+    radial-gradient(100% 85% at 95% 45%, var(--cc-b) 0%, transparent 55%),
+    radial-gradient(110% 95% at 10% 105%, var(--cc-c) 0%, transparent 60%),
+    radial-gradient(90% 80% at 95% 105%, var(--cc-c) 0%, transparent 55%);
+  /* Solid again — the translucent "coloured glass" look (opacity: 0.82,
+     letting the vault's photo show through) turned out not to read as
+     intended and was asked to be removed. Full opacity, plain paint. */
+  z-index: 0;
+}
+/* The sheen laid over the colour. It used to refract the card's own gradient
+   through an SVG displacement filter as well; that went with the rest of the
+   app's backdrop-filters, leaving the part that was always doing the visible
+   work — a lit rim and a diagonal wash between the gradient (z 0) and the
+   printed detail (z 2).
+
+   It still carries the sheen it always did, now as this same layer's own
+   background plus a lit rim, so the refraction and the highlight are one
+   pane of glass rather than two stacked films. */
+.cc-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.02) 42%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+  /* Where the light catches the edge of a real pane: bright along the top
+     lip, falling off into the body. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 0 30px -12px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.cc-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+.cc-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+/* Issuer badge + wordmark, worn top-left the way the reference card wears
+   its own. The mark is a plain ring, not any real network's logo. */
+.cc-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cc-brand-mark {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  position: relative;
+}
+.cc-brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+}
+.cc-brand-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cc-contactless {
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.cc-number {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.cc-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cc-card-bottom-left {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  min-width: 0;
+}
+/* The name is the one field that can run long, so it's the one that gets
+   to shrink — expiry and code are fixed-width by nature. */
+.cc-card-holder {
+  min-width: 0;
+}
+.cc-label {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+.cc-value {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Two interlocking rings, bottom-right — the generic payment mark every
+   card carries there. */
+.cc-rings {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.cc-ring {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.cc-ring + .cc-ring {
+  margin-left: -11px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* The network's mark in the card's bottom-right corner.
+
+   Sized to sit level with the rings it replaced so a card with no network
+   chosen yet does not jump when one is picked. The wordmarks are set in the
+   app's own face rather than each brand's real type — this is a label
+   telling three of the owner's own cards apart, not a reproduction. */
+.cc-net {
+  flex-shrink: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.cc-net-visa {
+  font-size: 21px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  color: #fff;
+  /* The dark keyline Visa's own mark carries on a coloured ground — without
+     it, white-on-pale-gradient loses the wordmark entirely. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.cc-net-rupay {
+  font-size: 17px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+/* RuPay's two halves in its two colours — the orange/green split is the
+   whole of what makes it recognisable at this size. */
+.cc-net-rupay > span:first-child {
+  color: #f47920;
+}
+.cc-net-rupay > span:last-child {
+  color: #48b04a;
+}
+
+.cc-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 16px 8px;
+}
+.cc-grid-item {
+  width: 100%;
+  text-align: left;
+}
+.cc-tile-wrap {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+}
+/* Wraps CardPreview (see CardTile). Holds the aspect-ratio, which moved here
+   from .cc-card itself back when a glass box sat between the two. */
+.cc-liquid-wrap {
+  aspect-ratio: 1.6 / 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+}
+.cc-pixel-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Password strength — four bars under the field.
+   ========================================================================== */
+
+.pw-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.pw-bars {
+  flex: 1;
+  display: flex;
+  gap: 5px;
+}
+
+/* Each bar grows out of its left edge on a spring, so the meter fills in a
+   direction rather than just changing colour. transform-origin is what makes
+   scaleX read as filling instead of stretching from the middle. */
+.pw-bar {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transform: scaleX(0.001);
+  transform-origin: left center;
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color var(--dur) linear;
+}
+.pw-bar[data-on] {
+  transform: scaleX(1);
+}
+
+.pw-label {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: color var(--dur) linear;
+}
+
+/* ==========================================================================
+   The More menu — tap the tab to open it, tap a row to go there (see
+   FanFab.tsx).
+
+   Styled after a GitHub-style dark settings list rather than the previous
+   fan-of-dots: a rounded card, icon-and-label rows, and the pressed row
+   sliding right behind a lit accent bar via `:active`.
+   ========================================================================== */
+
+.fan-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: var(--scrim);
+  animation: fade-in var(--dur) var(--ease-out);
+}
+
+/* Anchored to the centre of the third of three equal nav cells, as a
+   percentage rather than a pixel offset, so it stays above the More tab at
+   any screen width. transform-origin sits at that same corner so the panel
+   grows out of the button it came from rather than from its own centre. */
+.fan-panel {
+  position: fixed;
+  left: 83.333%;
+  bottom: calc(var(--sab) + var(--nav-h) + 8px);
+  z-index: 46;
+  width: 200px;
+  max-width: calc(100vw - var(--sal) - var(--sar) - 24px);
+  transform: translateX(-50%) scale(0.85);
+  transform-origin: bottom center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    opacity var(--dur) linear;
+}
+.fan-panel[data-open] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) scale(1);
+}
+
+.fan-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+.fan-row-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: color var(--dur) var(--ease-out);
+}
+.fan-row-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The row under the finger/cursor: slides right to clear room for the lit
+   bar, same cue the drag-highlight used to give the row it sat over. */
+.fan-row:active {
+  background: var(--surface-2);
+  color: var(--text);
+  transform: translateX(6px);
+}
+.fan-row:active .fan-row-icon {
+  color: var(--accent);
+}
+.fan-row:active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+/* The More tab's own icon turns over as the panel opens. */
+.fan-trigger {
+  transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fan-trigger[data-open] {
+  transform: rotate(135deg);
+}
+
+/* ==========================================================================
+   The transaction row's fold-out actions, and the hold-to-delete ring.
+   ========================================================================== */
+
+/* max-height rather than height, because the panel's real height is not known
+   until it is laid out. The open value is generously larger than the content
+   and the easing is heavily front-loaded, so the extra distance is covered in
+   the last few milliseconds and never reads as a pause at the end. */
+.tx-fold {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tx-fold.open {
+  max-height: 96px;
+}
+
+.tx-fold-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  background: var(--surface-2);
+  border-top: 1.5px solid var(--line);
+}
+
+.tx-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tx-act:active {
+  background: var(--line-strong);
+}
+
+/* Turns over as the panel opens. Springy on the way, because the chevron is
+   the one part of this that is purely a signal — it can afford the character. */
+.tx-chev {
+  transform: rotate(180deg);
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -------------------------- hold to confirm -------------------------- */
+
+.hold-confirm {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  touch-action: none;
+  color: var(--hold);
+}
+
+.hold-confirm svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg); /* start the sweep at twelve o'clock */
+}
+
+.hold-track {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+}
+
+.hold-ring {
+  fill: none;
+  stroke: var(--hold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* The ring only animates while a finger is down. Letting go removes the
+   class, the animation is dropped, and the dashoffset falls straight back to
+   its full value — the snap back is the absence of a transition, not another
+   animation. */
+.hold-confirm[data-holding] .hold-ring {
+  animation: hold-sweep 800ms linear forwards;
+}
+
+@keyframes hold-sweep {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hold-confirm[data-done] {
+  color: var(--income);
+}
+.hold-confirm[data-done] .hold-ring {
+  stroke: var(--income);
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.hold-glyph {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.hold-confirm[data-holding] .hold-glyph {
+  transform: scale(0.82);
+}
+.hold-confirm[data-done] .hold-glyph {
+  transform: scale(1.15);
+}
+
+/* ==========================================================================
+   Password strength — four bars under the field.
+   ========================================================================== */
+
+.pw-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.pw-bars {
+  flex: 1;
+  display: flex;
+  gap: 5px;
+}
+
+/* Each bar grows out of its left edge on a spring, so the meter fills in a
+   direction rather than just changing colour. transform-origin is what makes
+   scaleX read as filling instead of stretching from the middle. */
+.pw-bar {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transform: scaleX(0.001);
+  transform-origin: left center;
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color var(--dur) linear;
+}
+.pw-bar[data-on] {
+  transform: scaleX(1);
+}
+
+.pw-label {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: color var(--dur) linear;
+}
+
+/* ==========================================================================
+   Last Done — the detail sheet.
+
+   A year of days as squares, then every date underneath. The gap chart that
+   used to live here plotted the interval between each time, which for a job
+   done four times a year was four bars — accurate and useless. The calendar
+   carries the same information as a shape.
+   ========================================================================== */
+
+.ld-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 11px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ld-stat-v {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.ld-stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* 53 columns of 7. One scroller wraps both the month strip and the squares,
+   so they are laid out in the same space and cannot drift apart; a year of
+   readable squares is wider than a phone. */
+.ld-cal {
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 8px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ld-cal::-webkit-scrollbar {
+  display: none;
+}
+
+/* The calendar card on Sleep, Mood and a chore's detail. This was a real
+   refraction over the screen behind it, kept near-clear so the bending was
+   the effect; with the glass gone that left a 30%-opaque panel with a year
+   of squares showing through whatever it sat on. A solid raised tone
+   instead. Comes after .ld-cal and .sleep-cal in the cascade so it wins on
+   the two properties it touches. */
+.cal-glass {
+  position: relative;
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, #fff 20%, transparent);
+}
+/* The dressing that actually sells "pane of glass" — same idea as
+   .sheet-glass::before: a bright hairline where light catches the top rim,
+   a faint wash below it for the thickness of the glass. Absolutely
+   positioned against .cal-glass itself (not the scrolling .ld-cal-inner
+   beneath it) so it stays put as a year of weeks scrolls underneath rather
+   than sliding off with the squares. */
+.cal-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.03) 16%,
+    transparent 38%
+  );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+.cal-glass .ld-cal-inner {
+  position: relative;
+  z-index: 2;
+}
+
+.ld-cal-inner {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.ld-months {
+  display: flex;
+  gap: 3px;
+  padding-bottom: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* The labels are wider than the column they mark, so they overflow to the
+   right rather than stretching it. Their flex sizing has to match .ld-week
+   exactly — same basis, same grow, same bounds — or the labels drift out of
+   step with the squares underneath as the columns resize. */
+.ld-months > span {
+  flex: 1 1 var(--cal-cell);
+  /* Flex items default to min-width:auto, so a span holding "Sep" refuses to
+     shrink to its basis and pushes every later column out of step with the
+     squares below. An explicit min-width is what pins it — and it must be
+     the same floor the squares use, otherwise the two rows shrink by
+     different amounts once the grid is wide enough to scroll. */
+  min-width: var(--cal-cell);
+  max-width: var(--cal-cell-max);
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.ld-grid {
+  display: flex;
+  gap: 3px;
+}
+
+/* The columns size themselves to whatever card they land in rather than
+   being pinned to 11px.
+
+   Fixed squares meant the grid was only ever the right width by accident:
+   once the calendars started showing only as far back as there was data,
+   a few weeks of squares sat in the top-left of a full-width card with a
+   dead purple field beside them. Growing to fill is what keeps it even at
+   any column count and on any screen.
+
+   The floor is what preserves the old behaviour at a full year — 53
+   columns cannot shrink past it, so the card overflows and scrolls exactly
+   as before. The ceiling stops a handful of columns from inflating into
+   giant tiles; weeksToShow's own floor is set so the two meet, and the row
+   fills without ever reaching it. */
+.ld-cal {
+  --cal-cell: 11px;
+  --cal-cell-max: 26px;
+}
+
+.ld-week {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 var(--cal-cell);
+  min-width: var(--cal-cell);
+  max-width: var(--cal-cell-max);
+}
+
+.ld-week > i {
+  /* Square by ratio rather than by a matching pair of pixel values, so the
+     height follows the width the flex row worked out. */
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+/* Days that have not happened yet are left blank rather than drawn as
+   missed — the last column always runs to Saturday. */
+.ld-week > i[data-future] {
+  background: transparent;
+}
+.ld-week > i[data-today] {
+  box-shadow: 0 0 0 1.5px var(--muted);
+}
+
+/* Month range on a habit's own calendar (not Sleep's or Last Done's —
+   scoped to .habit-cal so theirs stay the dense year view) trades column
+   count for square size, big enough to hold the day's actual number rather
+   than just a coloured dot. */
+/* Pinned outright rather than left to the flexible sizing above: these
+   squares hold a printed number, which needs a size picked to fit the text
+   rather than one derived from how many columns happen to be showing.
+   Because they cannot stretch, five of them can never fill a phone — the
+   leftover space is centred instead (see .ld-cal-inner below) so it falls
+   evenly on both sides rather than all down the right-hand edge. */
+.habit-cal[data-range='month'] .ld-week {
+  gap: 5px;
+  flex: 0 0 26px;
+  max-width: none;
+}
+.habit-cal[data-range='month'] .ld-months > span {
+  flex: 0 0 26px;
+  min-width: 26px;
+  max-width: none;
+}
+.habit-cal[data-range='month'] .ld-week > i {
+  width: 26px;
+  height: 26px;
+  aspect-ratio: auto;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+/* Five columns is nowhere near a year's 53 — left to the year view's own
+   rules the box stays full width (built for a horizontal scroller) with
+   the five columns stranded on the left. Shrinking the inner wrapper to
+   its own content and centering it in the box fixes both at once. */
+.habit-cal[data-range='month'] .ld-cal-inner {
+  /* Block, not the inline-block it inherits: `margin: 0 auto` centres a
+     block box, but on an inline-block the auto margins resolve to zero and
+     the wrapper just sits at the inline start. That is why this had been
+     shrinking to its content correctly and still coming out hard against
+     the left edge with the whole gap on the right. */
+  display: block;
+  min-width: 0;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+/* The week view isn't the year view scaled up — a week is a row, so it's
+   laid out as one: seven squares side by side, each with its own weekday
+   initial, no scrolling box built for fifty-three columns wrapped around
+   just one. */
+.ld-week-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.ld-week-strip-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ld-week-strip-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ld-week-strip-col > i {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.ld-week-strip-col > i[data-future] {
+  background: transparent;
+  border: 1.5px dashed var(--line);
+}
+.ld-week-strip-col > i[data-today] {
+  box-shadow: 0 0 0 1.5px var(--muted);
+}
+
+.ld-dates {
+  max-height: 168px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ld-dates::-webkit-scrollbar {
+  display: none;
+}
+
+.ld-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.ld-date:last-child {
+  border-bottom: none;
+}
+
+
+/* ==========================================================================
+   Transient effects — ripple, particle burst, confetti.
+
+   Every one of these is spawned by lib/fx.ts, animates once and removes
+   itself. They are transform+opacity only, so they run on the compositor and
+   never lay the page out again mid-flight.
+   ========================================================================== */
+
+@keyframes fx-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.32;
+  }
+  to {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+.fx-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  pointer-events: none;
+  /* scaled from the centre of its own box, which is why fx.ts positions it
+     at (point - radius) rather than at the point itself */
+  transform: scale(0);
+  animation: fx-ripple 600ms var(--ease-out) forwards;
+}
+
+/* A host that wants ripples has to clip them and own a stacking context. */
+.fx-host {
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes fx-particle {
+  from {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0);
+    opacity: 0;
+  }
+}
+
+.fx-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  animation: fx-particle 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fx-confetti {
+  from {
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.fx-confetti {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 3;
+  animation: fx-confetti 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* The burst has to escape the button it fires from, so that button cannot be
+   the thing clipping ripples. Kept separate from .fx-host on purpose. */
+.fx-emit {
+  position: relative;
+  overflow: visible;
+}
+
+/* The habit tick, as a heart.
+   Outline while undone, filled and popped once done. The pop overshoots to
+   ~1.35 and settles, which is what makes it feel like a reaction rather than
+   a state change. It runs once, on the transition into done. */
+.habit-heart {
+  fill: none;
+  transition: fill var(--dur-fast) linear;
+}
+.habit-heart[data-done] {
+  fill: currentColor;
+  animation: heart-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes heart-pop {
+  0% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ==========================================================================
+   The transaction row's fold-out actions, and the hold-to-delete ring.
+   ========================================================================== */
+
+/* max-height rather than height, because the panel's real height is not known
+   until it is laid out. The open value is generously larger than the content
+   and the easing is heavily front-loaded, so the extra distance is covered in
+   the last few milliseconds and never reads as a pause at the end. */
+.tx-fold {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tx-fold.open {
+  max-height: 96px;
+}
+
+.tx-fold-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  background: var(--surface-2);
+  border-top: 1.5px solid var(--line);
+}
+
+.tx-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tx-act:active {
+  background: var(--line-strong);
+}
+
+/* Turns over as the panel opens. Springy on the way, because the chevron is
+   the one part of this that is purely a signal — it can afford the character. */
+.tx-chev {
+  transform: rotate(180deg);
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -------------------------- hold to confirm -------------------------- */
+
+.hold-confirm {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  touch-action: none;
+  color: var(--hold);
+}
+
+.hold-confirm svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg); /* start the sweep at twelve o'clock */
+}
+
+.hold-track {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+}
+
+.hold-ring {
+  fill: none;
+  stroke: var(--hold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* The ring only animates while a finger is down. Letting go removes the
+   class, the animation is dropped, and the dashoffset falls straight back to
+   its full value — the snap back is the absence of a transition, not another
+   animation. */
+.hold-confirm[data-holding] .hold-ring {
+  animation: hold-sweep 800ms linear forwards;
+}
+
+@keyframes hold-sweep {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hold-confirm[data-done] {
+  color: var(--income);
+}
+.hold-confirm[data-done] .hold-ring {
+  stroke: var(--income);
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.hold-glyph {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.hold-confirm[data-holding] .hold-glyph {
+  transform: scale(0.82);
+}
+.hold-confirm[data-done] .hold-glyph {
+  transform: scale(1.15);
+}
+
+/* ==========================================================================
+   Password strength — four bars under the field.
+   ========================================================================== */
+
+.pw-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.pw-bars {
+  flex: 1;
+  display: flex;
+  gap: 5px;
+}
+
+/* Each bar grows out of its left edge on a spring, so the meter fills in a
+   direction rather than just changing colour. transform-origin is what makes
+   scaleX read as filling instead of stretching from the middle. */
+.pw-bar {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transform: scaleX(0.001);
+  transform-origin: left center;
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color var(--dur) linear;
+}
+.pw-bar[data-on] {
+  transform: scaleX(1);
+}
+
+.pw-label {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: color var(--dur) linear;
+}
+
+/* ==========================================================================
+   The transaction row's fold-out actions, and the hold-to-delete ring.
+   ========================================================================== */
+
+/* max-height rather than height, because the panel's real height is not known
+   until it is laid out. The open value is generously larger than the content
+   and the easing is heavily front-loaded, so the extra distance is covered in
+   the last few milliseconds and never reads as a pause at the end. */
+.tx-fold {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tx-fold.open {
+  max-height: 96px;
+}
+
+.tx-fold-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 10px;
+  background: var(--surface-2);
+  border-top: 1.5px solid var(--line);
+}
+
+.tx-act {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--text);
+}
+.tx-act:active {
+  background: var(--line-strong);
+}
+
+/* Turns over as the panel opens. Springy on the way, because the chevron is
+   the one part of this that is purely a signal — it can afford the character. */
+.tx-chev {
+  transform: rotate(180deg);
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -------------------------- hold to confirm -------------------------- */
+
+.hold-confirm {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  touch-action: none;
+  color: var(--hold);
+}
+
+.hold-confirm svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg); /* start the sweep at twelve o'clock */
+}
+
+.hold-track {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 3;
+}
+
+.hold-ring {
+  fill: none;
+  stroke: var(--hold);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* The ring only animates while a finger is down. Letting go removes the
+   class, the animation is dropped, and the dashoffset falls straight back to
+   its full value — the snap back is the absence of a transition, not another
+   animation. */
+.hold-confirm[data-holding] .hold-ring {
+  animation: hold-sweep 800ms linear forwards;
+}
+
+@keyframes hold-sweep {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.hold-confirm[data-done] {
+  color: var(--income);
+}
+.hold-confirm[data-done] .hold-ring {
+  stroke: var(--income);
+  animation: none;
+  stroke-dashoffset: 0;
+}
+
+.hold-glyph {
+  position: relative;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.hold-confirm[data-holding] .hold-glyph {
+  transform: scale(0.82);
+}
+.hold-confirm[data-done] .hold-glyph {
+  transform: scale(1.15);
+}
+
+/* ==========================================================================
+   Password strength — four bars under the field.
+   ========================================================================== */
+
+.pw-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
+}
+
+.pw-bars {
+  flex: 1;
+  display: flex;
+  gap: 5px;
+}
+
+/* Each bar grows out of its left edge on a spring, so the meter fills in a
+   direction rather than just changing colour. transform-origin is what makes
+   scaleX read as filling instead of stretching from the middle. */
+.pw-bar {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transform: scaleX(0.001);
+  transform-origin: left center;
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color var(--dur) linear;
+}
+.pw-bar[data-on] {
+  transform: scaleX(1);
+}
+
+.pw-label {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: color var(--dur) linear;
+}
+
+/* ==========================================================================
+   Last Done — the detail sheet.
+   ========================================================================== */
+
+.ld-units {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+
+.ld-unit {
+  flex: 1 1 0;
+  padding: 7px 0;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: var(--muted);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) linear;
+}
+.ld-unit[data-on] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.ld-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 11px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.ld-stat-v {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.ld-stat-l {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+/* Gaps between completions. Bars grow up from the baseline as the sheet
+   settles, left to right, so the rhythm is read in the order it happened. */
+.ld-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 92px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+}
+.ld-chart::-webkit-scrollbar {
+  display: none;
+}
+
+.ld-bar {
+  flex: 1 1 0;
+  min-width: 5px;
+  border-radius: 2px 2px 0 0;
+  transform-origin: bottom center;
+  animation: ld-grow 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* The gap still running is drawn as an outline — it is not a measurement yet. */
+.ld-bar[data-open] {
+  outline: 1.5px dashed var(--line-strong);
+  outline-offset: -1px;
+}
+
+@keyframes ld-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+
+/* ==========================================================================
+   RGB-split glitch on the Habits title.
+
+   Two copies of the word, drawn from `content: attr(data-text)` so the text
+   itself is written once in the markup — one tinted red, one blue, sitting
+   exactly on top of the real thing. Tearing comes from clip-path taking a
+   different horizontal slice each frame while the layer is nudged a pixel or
+   two sideways, so the slices separate and snap back.
+
+   steps(1) is what makes it read as a glitch: the value holds until the next
+   keyframe and then jumps, instead of easing between them. Eased, the same
+   keyframes look like a wobble.
+
+   It loops forever, but it is not tearing forever. The cycle is 3.6s and the
+   tearing lives in the first ~14% of it; the rest is the copies sitting at
+   zero opacity with the real title clean underneath. A word that tore
+   continuously would be unreadable, and this one sits above the screen the
+   owner checks every morning — same shape of compromise as the decoding
+   title on Last Done.
+   ========================================================================== */
+
+.glitch {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  opacity: 0;
+  pointer-events: none;
+  /* inherits weight and size from .t-title, so the copies register exactly
+     over the real word */
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.glitch::before {
+  color: #ff2d55;
+  animation: glitch-red 3.6s steps(1, end) infinite;
+}
+
+.glitch::after {
+  color: #2d9bff;
+  animation: glitch-blue 3.6s steps(1, end) infinite;
+}
+
+/* The two channels take different slices at different moments — if they tore
+   in step they would read as one shadow rather than a split. Percentages are
+   tight because the whole burst is squeezed into the head of a long cycle. */
+@keyframes glitch-red {
+  0% {
+    opacity: 0.9;
+    clip-path: inset(6% 0 72% 0);
+    transform: translate(-2px, -1px);
+  }
+  2.2% {
+    clip-path: inset(48% 0 28% 0);
+    transform: translate(2px, 1px);
+  }
+  4.3% {
+    clip-path: inset(76% 0 6% 0);
+    transform: translate(-3px, 0);
+  }
+  6.5% {
+    clip-path: inset(24% 0 54% 0);
+    transform: translate(2px, -1px);
+  }
+  8.6% {
+    clip-path: inset(62% 0 18% 0);
+    transform: translate(-1px, 1px);
+  }
+  10.8% {
+    opacity: 0.9;
+    clip-path: inset(10% 0 66% 0);
+    transform: translate(1px, 0);
+  }
+  13% {
+    opacity: 0.5;
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(0, 0);
+  }
+  14.4%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes glitch-blue {
+  0% {
+    opacity: 0.9;
+    clip-path: inset(58% 0 20% 0);
+    transform: translate(2px, 1px);
+  }
+  2.2% {
+    clip-path: inset(14% 0 64% 0);
+    transform: translate(-2px, -1px);
+  }
+  4.3% {
+    clip-path: inset(34% 0 44% 0);
+    transform: translate(3px, 1px);
+  }
+  6.5% {
+    clip-path: inset(70% 0 10% 0);
+    transform: translate(-2px, 0);
+  }
+  8.6% {
+    clip-path: inset(20% 0 58% 0);
+    transform: translate(1px, -1px);
+  }
+  10.8% {
+    opacity: 0.9;
+    clip-path: inset(50% 0 30% 0);
+    transform: translate(-1px, 0);
+  }
+  13% {
+    opacity: 0.5;
+    clip-path: inset(40% 0 40% 0);
+    transform: translate(0, 0);
+  }
+  14.4%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+
+/* Was an infinite loop (re-tearing every 3.6s for as long as Habits' title
+   stayed mounted) — off unconditionally now rather than only under
+   prefers-reduced-motion. The RGB-split copies just sit invisible. */
+.glitch::before,
+.glitch::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* ==========================================================================
+   Week picker — choosing a day in Daily.
+
+   Replaces the native date input, which handed the whole job to Android's
+   modal calendar for what is nearly always "yesterday" or "the day before".
+   ========================================================================== */
+
+.wk {
+  padding: 4px 14px 18px;
+}
+
+.wk-seg {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+.wk-seg > button {
+  position: relative;
+  flex: 1 1 0;
+  z-index: 1;
+  padding: 9px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+  transition: color var(--dur) linear;
+}
+.wk-seg > button[data-on] {
+  color: var(--text);
+}
+
+/* Sized to the column, not the label, so it never resizes as it slides. */
+.wk-pill {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--surface-3);
+  box-shadow: 0 2px 8px -3px rgba(0, 0, 0, 0.6);
+  transition: transform 320ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.wk-pill[data-at='1'] {
+  transform: translateX(100%);
+}
+
+.wk-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 4px 10px;
+}
+.wk-month {
+  font-size: 40px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.wk-day {
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wk-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.wk-arrow {
+  flex-shrink: 0;
+  width: 30px;
+  height: 44px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.wk-days {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.wk-cell {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 0;
+}
+.wk-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.wk-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    transform var(--dur) var(--ease-out),
+    background-color var(--dur) linear;
+}
+.wk-cell[data-today] .wk-num {
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+/* The selected day is the one bright thing on the strip — a filled disc in
+   the accent, lifted slightly so it reads as sitting on top of the row. */
+.wk-cell[data-on] .wk-num {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 4px 14px -4px var(--accent);
+  transform: scale(1.08);
+}
+
+.wk-grid-head {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 10px 0 4px;
+}
+
+.wk-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.wk-gcell {
+  height: 38px;
+  border-radius: 50%;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--dur) linear;
+}
+.wk-gcell[data-out] {
+  color: var(--muted);
+  opacity: 0.45;
+}
+.wk-gcell[data-today] {
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+.wk-gcell[data-on] {
+  color: #fff;
+  background: var(--accent);
+}
+
+.wk-today {
+  width: 100%;
+  margin-top: 16px;
+  padding: 13px 0;
+  border-radius: var(--r-md);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--surface));
+}
+
+/* ==========================================================================
+   The unlocked vault's surfaces.
+
+   Every one of these — the rows, the password cards, each document's
+   caption, the tab strip and the bottom bar — used to bend the collage
+   behind it through a backdrop-filter. They are solid tones over it now.
+   The photo still shows around them rather than through them, which is what
+   keeps account numbers and IFSC codes readable on a busy background.
+
+   ========================================================================== */
+
+.vault-row {
+  /* Deliberately no `position` here: `isolation: isolate` opens a stacking
+     context without touching positioning, which matters because this rule is
+     shared by surfaces that rely on their own absolute/fixed placement. */
+  isolation: isolate;
+}
+
+/* One vault entry — a bank account, a GST record.
+ *
+ * A floating pane rather than a full-bleed strip with a hairline under it.
+ * That shape change is most of what makes this read as *glass* instead of as
+ * "a slightly see-through bar": a sheet of glass has edges and sits above
+ * what it covers, so it needs a gap around it, a radius, a lit top lip where
+ * the light catches, and a shadow proving there is space underneath. A row
+ * that runs wall to wall and butts against the next one has none of those
+ * cues, however transparent it is.
+ *
+ * Still tinted enough to read against a busy collage — these rows carry
+ * account numbers and IFSC codes, which is the entire reason the screen
+ * exists, so the pane never gets clear enough to let the picture compete
+ * with them. */
+.vault-row {
+  margin: 8px 10px;
+  padding: 13px 15px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow:
+    /* the lit top lip, and a fainter one round the rest of the edge */
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    /* the pane sitting above the photo rather than printed on it */
+    0 10px 26px -14px rgb(0 0 0 / 0.9);
+}
+
+/* The password tiles keep their own lit colour spill (--pw-a) and bloom
+   header; only the body behind them turns to glass. A softer distortion than
+   the rows — these are large panels, and the row filter's tighter noise reads
+   as texture rather than refraction at this size. */
+.pw-card {
+  background: var(--surface);
+  /* The same lit lip the vault rows get, so the two screens read as one
+     material. Layered over the card's existing coloured spill rather than
+     replacing it — that glow is what tells the three tiles apart. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 10px 26px -14px rgb(0 0 0 / 0.85),
+    0 6px 20px -10px color-mix(in srgb, var(--pw-a, transparent) 55%, transparent);
+}
+
+/* A document's caption sits directly on its own photo, not on the collage,
+   so this pane frosts the *document* under it — which is what stops a busy
+   scan showing through the title.
+
+   The dark gradient stays near its original strength on purpose. Blur is not
+   contrast: frosting a bright yellow tile leaves it just as bright, and the
+   caption is white text. Lightening this to let more of the document through
+   made the titles nearly unreadable on the pale ones, which is the whole job
+   the gradient was doing. */
+.doc-thumb-title {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.18) 100%);
+}
+
+.doc-select-bar {
+  background: var(--surface-2);
+}
+
+/* The vault's own tab strip and the app's bottom bar. Lighter tints than the
+   content surfaces — these carry short labels and icons rather than data, so
+   they can afford to show more of the picture. */
+.vault-tabbar {
+  position: relative;
+  background: var(--surface);
+}
+.vault-navbar {
+  position: relative;
+  background: var(--surface);
+  border-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   A foldable section heading — Kitee's item categories, and Documents'
+   per-person groups.
+
+   Deliberately the same metrics and type as the plain SectionLabel it
+   replaced (px-5 pt-6 pb-2, .t-cap), so a list with nothing folded looks
+   exactly as it did before — the only additions are a chevron and a count.
+   Transparent by default, since on Kitee the gaps between rows are where the
+   galaxy behind them actually shows through; Documents has no photo behind
+   it, so transparent there just means "the screen's own background". */
+.fold-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 24px 20px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+}
+.fold-row:active .fold-count {
+  background: var(--line-strong);
+}
+
+/* Turns over as the section folds — the same spring the transaction row's
+   chevron uses, so the two read as one gesture across the app. Pointing down
+   when open, right when shut. */
+.fold-chev {
+  flex-shrink: 0;
+  transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fold-chev[data-shut] {
+  transform: rotate(-90deg);
+}
+
+.fold-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-align: center;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+/* The "Details" link on a loan card. A span rather than a button (the card
+   itself is one), so it needs its own affordance and a tap target that does
+   not depend on the tiny text. */
+.loan-more {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.loan-more:active {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}

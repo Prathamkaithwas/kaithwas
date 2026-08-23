@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The background must reach the layer edges; insetting it leaves bare
+         corners on launchers that mask to a square or squircle. Only the
+         foreground is inset, to land the artwork in the adaptive safe zone. -->
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground>
+        <inset android:drawable="@mipmap/ic_launcher_foreground" android:inset="16.7%" />
+    </foreground>
+</adaptive-icon>
