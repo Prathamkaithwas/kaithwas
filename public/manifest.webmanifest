@@ -4,13 +4,13 @@
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f2f2f2",
-  "theme_color": "#2fa3a0",
+  "theme_color": "#024e46",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
