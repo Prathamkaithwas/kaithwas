@@ -3,6 +3,7 @@ import type { Category, Split } from '../types'
 import { formatAmount, toPaise } from '../lib/money'
 import { AlphaIndex, indexLetter } from './AlphaIndex'
 import { Sheet } from './ui'
+import { TimeRuler } from './TimeRuler'
 import { useStore } from '../store'
 import { accountsByGroup, categoryLabel } from '../lib/calc'
 import { ACCOUNT_GROUPS, type AccountGroup } from '../types'
@@ -888,18 +889,12 @@ export function DateTimePicker({
             )
           })}
         </div>
-        <div
-          className="flex items-center justify-between mt-4 pt-3 border-t"
-          style={{ borderColor: 'var(--line)' }}
-        >
-          <span className="text-[14px]">Time</span>
-          <input
-            type="time"
+        <div className="mt-4 pt-3 border-t" style={{ borderColor: 'var(--line)' }}>
+          <TimeRuler
             value={time}
-            className="text-[14px]"
-            onChange={(e) => {
-              setTime(e.target.value)
-              onSelect(`${selectedKey}T${e.target.value}`)
+            onChange={(next) => {
+              setTime(next)
+              onSelect(`${selectedKey}T${next}`)
             }}
           />
         </div>

@@ -119,7 +119,7 @@ export function Hidden({ onBack }: { onBack: () => void }) {
         </div>
       ))}
 
-      {section('Last Done', chores.length)}
+      {section('Muskan', chores.length)}
       {chores.map((c) => (
         <div
           key={c.id}

@@ -8,10 +8,12 @@
 
 No account. No server. No subscription. Every entry, photo and document lives on the device it was typed on.
 
-[![Platform](https://img.shields.io/badge/platform-Android-3ddc84?logo=android&logoColor=white)](#)
-[![Built with React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](#)
-[![Capacitor](https://img.shields.io/badge/Capacitor-8-119eff?logo=capacitor&logoColor=white)](#)
+[![Platform](https://img.shields.io/badge/platform-Android-3ddc84?logo=android&logoColor=white)](#download)
+[![Built with React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)](#under-the-hood)
+[![Capacitor](https://img.shields.io/badge/Capacitor-8-119eff?logo=capacitor&logoColor=white)](#under-the-hood)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+**[⬇ Download the latest APK](../../releases/latest)**
 
 </div>
 
@@ -20,48 +22,66 @@ No account. No server. No subscription. Every entry, photo and document lives on
 ## Screenshots
 
 <!--
-  Drop real device screenshots in `docs/screenshots/` and reference them
-  here — e.g. docs/screenshots/daily.png, habits.png, vault.png, sleep.png.
-  A 2–4 column table reads well on GitHub:
+  Drop real device screenshots in `docs/screenshots/` and reference them here.
+  A 2–4 column table reads well on GitHub, e.g.:
 
-  | Daily | Habits | Vault | Sleep |
+  | Daily | Habits | Shafali | Sleep |
   |:---:|:---:|:---:|:---:|
   | <img src="docs/screenshots/daily.png" width="200"> | <img src="docs/screenshots/habits.png" width="200"> | <img src="docs/screenshots/vault.png" width="200"> | <img src="docs/screenshots/sleep.png" width="200"> |
+
+  Good candidates, one per screen: the Daily ledger, Niba with Today's Plan
+  open, Habits (mood tile + a couple of habit cards), Sleep's dial, the
+  Shafali lock screen, an unlocked bank/card view, and Documents.
 -->
 
-*Screenshots coming soon.*
+*Screenshots aren't in this repo yet — this build environment can't export image files to disk. If you're reading this and have the app open on a phone, five or six screenshots dropped into `docs/screenshots/` (see that folder's own README) is all this section needs.*
+
+## Download
+
+The latest signed debug APK is attached to **[the newest GitHub Release](../../releases/latest)** — no build step required, just download and install (you'll need to allow "install from unknown sources" once, since this isn't distributed through a store). Every release is built from the exact commit it's tagged on.
+
+Want to build it yourself instead? See [Getting started](#getting-started) below.
 
 ## What this is
 
 Kaithwas is a single-owner business and life tracker, built to run entirely on one Android phone with nothing on the other end of a network call. It started as an expense ledger for a shop and grew into the one place its owner actually opens every day — the books, the notes, the habits, the sleep, the loans, and the one drawer that stays locked.
 
-Every screen was designed for a specific, real complaint from actual use, not a feature checklist. The calculator remembers what you typed if the phone gets backgrounded mid-entry. Categories stay collapsed the way you left them, even after a full restart. The daily mood carries forward until you log a new one, instead of pretending yesterday's feelings reset at midnight. None of it is hypothetical — it's the record of fixing what was actually annoying to use.
+Every screen was designed for a specific, real complaint from actual use, not a feature checklist. The calculator remembers what you typed if the phone gets backgrounded mid-entry. Categories stay collapsed the way you left them, even after a full restart. The daily mood carries forward until you log a new one, instead of pretending yesterday's feelings reset at midnight. The vault locks with four icons you tap in your own order, not a PIN anyone could read off your screen. None of it is hypothetical — it's the record of fixing what was actually annoying to use.
 
-## Features
+## Features, in detail
 
-**Daily ledger** — quick-add income/expense entries through a purpose-built calculator keypad (not a form), categories and subcategories, split payments across accounts, deal ratings, and hold-to-delete instead of a confirm dialog for anything you're about to remove.
+### Daily ledger
+Quick-add income and expense entries through a purpose-built calculator keypad rather than a scrolling form: type the amount, pick a category and account, done. Categories nest into subcategories, one entry can split across several accounts, and every entry can carry a photo. A "deal rating" records how a sale actually went, separate from the number. Swipe a row open for Edit, Duplicate, or a **hold-to-delete** button — deleting is a deliberate 800ms press with a closing ring, never a stray tap. If the phone gets backgrounded mid-entry (a call, a notification, switching apps), the draft is written to storage on every change and restored the moment you come back — nothing typed is ever silently lost.
 
-**Niba (journal)** — a running notebook of dated notes, with **Today's Plan** living behind its own header icon: a Morning/Afternoon/Evening task planner with an auto-plan pass (priority + duration, respects anything you've placed by hand) and drag-to-reorder.
+### Niba — journal & daily planner
+A running notebook of dated notes, newest first, that never disappears just because you're not browsing "this month" any more — a note belongs to the day it was written, not to whatever period the ledger happens to be showing. **Today's Plan** lives behind its own header icon as a full-screen panel: tasks bucketed into Morning / Afternoon / Evening, a priority dot on each, drag-to-reorder within a block, and an **Auto-plan** pass that buckets everything by priority and duration in one tap — respecting anything you've already placed by hand.
 
-**Habits & mood** — streaks, both plain tap-to-log habits and metered ones (build up a number through the day rather than one checkbox), nine hand-picked moods that carry forward day to day, and eight different animated card surfaces you can pick per habit.
+### Habits & mood
+Two kinds of habit: a plain tap-to-mark-done, and a **metered** one you build up through the day (pages read, glasses of water) with its own extra row of stats — best run, last-30-days average — instead of just a streak. Nine hand-picked moods replace a generic 1–5 scale, and the mood shown on the Habits tab **carries forward** day to day until you log a new one, rather than resetting to a blank "tap to log" prompt every midnight. Each habit can pick from eight animated card surfaces (dither, lenticular, specular, foil, metaball, moiré, aurora, grid) — press and hold a card to see it move.
 
-**Sleep** — a night-by-night bedtime/wake dial with a rolling 7-night average and a full activity calendar.
+### Sleep
+A 24-hour dial, not a 12-hour one — bedtime and wake time can't land on the same point the way they would on a half-day face, so the two handles are never ambiguous to drag. A rolling 7-night average sits above it, with a full year-of-squares activity calendar below.
 
-**Vault** — bank accounts, cards (with real network marks — Visa, Mastercard, RuPay), passwords, and documents (photo or PDF, rendered in-app), all behind a PIN you choose on first use and AES-256-GCM encryption (PBKDF2, 150k iterations) — the passphrase itself is never stored, only a salt and an encrypted canary used to tell a right PIN from a wrong one.
+### Shafali — the private vault
+Bank accounts (with real network marks — Visa, Mastercard, RuPay — not generic rings), cards, passwords, and documents, all behind a lock **you** design: tap four icons, in your own order, out of nine choices — then tap the same four again to confirm. AES-256-GCM encryption, keyed by a PBKDF2-derived key from that sequence (150,000 iterations); the sequence itself is never stored anywhere, only a salt and an encrypted "canary" string used to tell a right sequence from a wrong one without ever knowing the right one in plain form. Documents (photo or PDF scans, rendered right in the app with a real PDF preview) sit behind the same screen but aren't encrypted the same way, since they're not the kind of thing that needs it — bank details and passwords are.
 
-**Loans** — EMI tracking, a prepayment-effect calculator, and reminders ahead of each due date.
+### Loans
+EMI tracking against real loan terms, a prepayment-effect calculator (what does paying an extra ₹10,000 today actually save in interest?), and reminders that fire ahead of each due date.
 
-**Purchases & stock** — a supplier rate book with per-item variants (colour, size, base — whatever the product actually varies by), so "what did I pay for this last time" is a search, not a memory.
+### Purchases & stock
+A supplier rate book, not just a shopping list: each item can carry variants — colour, size, base, whatever it actually varies by — generated from a trait builder rather than typed out combination by combination. Categories fold shut and **stay** shut across app restarts, so a long list doesn't have to be re-collapsed every time the app opens.
 
-**Backup that means it** — one JSON export captures the entire database, attachments included, so a restore brings back everything, not just the numbers. Runs automatically once a day on-device; nothing is ever silently pruned.
+### Backup that means it
+One JSON export captures the *entire* database — every transaction, habit, note, loan, and every photo and PDF attached to any of them — so a restore brings back everything, not just the numbers. Runs automatically once a day on-device, and old snapshots are never pruned: disk is cheap, and a retention rule is a rule that could one day delete the last good copy.
 
 ## Under the hood
 
 - **React 19 + TypeScript + Vite**, wrapped as a native Android app with **Capacitor 8** — the same codebase runs in a browser for development and ships as a real APK.
-- **No backend.** The whole database is one JSON object, persisted through IndexedDB. There is no account system and nothing ever leaves the device unless you export it yourself.
-- **Fast cold start on real data.** The database splits into a small "core" (transactions, habits, notes — everything the first screen needs) and a separate "attach" bucket (loans, documents, vault items, purchase items — wherever photos and PDFs pile up). Core loads first and unblocks the UI immediately; the heavier bucket loads in the background right after, so opening the app doesn't get slower just because you've attached more scans over time.
-- **Tailwind CSS v4** for a dense, flat, dark-first design system — no backdrop-filter, no idle/looping animation, nothing spent on decoration that isn't communicating a state change.
-- **Web Crypto API** (AES-256-GCM + PBKDF2) for the Vault, entirely client-side.
+- **No backend, ever.** The whole database is one JSON object, persisted through IndexedDB. There is no account system and nothing leaves the device unless exported by hand.
+- **Fast cold start, independent of how much you've attached.** The database splits into a small "core" (transactions, habits, notes — everything the first screen needs) and a separate "attach" bucket (loans, documents, vault items, purchase items — wherever photos and PDFs pile up). Core loads first and unblocks the UI immediately; the heavier bucket loads in the background right after, folded in by id so nothing added during that gap is lost.
+- **Tailwind CSS v4** for a dense, flat, dark-first design system — no `backdrop-filter`, no idle or looping animation, nothing spent on decoration that isn't communicating a real state change.
+- **Web Crypto API** (AES-256-GCM + PBKDF2) for the vault, entirely client-side — see `src/lib/crypto.ts`.
+- A **service worker** caches the app shell for the browser/PWA path only; it's explicitly torn down on the native Android build, where the APK already ships every asset and a cache-first worker would just serve a stale version after every update.
 
 ## Getting started
 
@@ -70,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5180` — the app runs fully in the browser for development, IndexedDB and all.
+Opens at `http://localhost:5180` — the app runs fully in the browser for development, IndexedDB and all. A first run seeds realistic sample data automatically in dev mode (never in a production build), including a demo vault unlockable by tapping **heart → star → sun → moon**.
 
 ### Build the Android app
 
@@ -80,19 +100,27 @@ npx cap sync android
 cd android && ./gradlew assembleDebug
 ```
 
-Requires the Android SDK and a JDK 21 on `JAVA_HOME`. The resulting APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
+Requires the Android SDK and JDK 21 on `JAVA_HOME`. The resulting APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### Publishing to an app store
+
+[`docs/store-listing.md`](docs/store-listing.md) has copy-paste-ready text for Google Play Console / App Store Connect — name, description, keywords, category, and an honest data-safety statement (this app collects nothing, so that part's easy) — so a future store submission is mostly filling in a form, not writing marketing copy from scratch.
 
 ## Project structure
 
 ```
 src/
   screens/     One file per tab/section — Trans (Daily/Niba), Habits, Sleep,
-               Authentication (Vault), Loans, Purchase, More, ...
-  components/  Shared UI: the calculator keypad, hold-to-delete, toasts, pickers
-  lib/         Storage (db.ts), crypto, date math, backup/restore, PDF
-               rendering, the auto-planner algorithm
+               Authentication (the vault), Loans, Purchase, More, ...
+  components/  Shared UI: the calculator keypad, the drag-based time ruler,
+               hold-to-delete, toasts, pickers
+  lib/         Storage (db.ts — the core/attach split), crypto, date math,
+               backup/restore, PDF rendering, the auto-planner algorithm
   store.tsx    The single app-wide store — one context, one reducer-shaped API
 android/       Capacitor's native Android project
+docs/
+  store-listing.md    Copy-paste-ready app store submission text
+  screenshots/        Drop real device screenshots here
 ```
 
 ## License

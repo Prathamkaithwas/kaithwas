@@ -20,12 +20,15 @@ import { MOOD_TAGS } from '../types'
 import { addDays, todayKey } from './date'
 import { CHART_COLORS, uid } from './seed'
 import { deriveVaultKey, encryptJSON, encryptText, randomSaltB64 } from './crypto'
-import { CANARY } from './vaultConst'
+import { CANARY, sequenceToPassphrase } from './vaultConst'
 
-/** Dev preview only — real installs have the owner choose their own PIN in
- *  VaultLock (Authentication.tsx). Fixed here purely so the fake vault
- *  entries this file seeds are unlockable without a setup step. */
-const DEV_DEMO_PIN = '6666'
+/** Dev preview only — real installs have the owner pick their own four-icon
+ *  sequence in VaultLock (Authentication.tsx). Fixed here purely so the
+ *  fake vault entries this file seeds are unlockable without going through
+ *  that setup: heart, star, sun, moon, tapped in the same grid VaultLock
+ *  itself renders. */
+const DEV_DEMO_SEQUENCE = ['heart', 'star', 'sun', 'moon']
+const DEV_DEMO_PASSPHRASE = sequenceToPassphrase(DEV_DEMO_SEQUENCE)
 
 /**
  * Dev-only sample data — every screen has something real to look at instead
@@ -366,11 +369,11 @@ export function withFakeData(db: DB): DB {
 /**
  * The vault and passwords are encrypted at rest, so seeding them needs a
  * real key rather than a plain object literal. This provisions the vault's
- * lock with DEV_DEMO_PIN above and encrypts each sample entry under it — so
- * opening Vault or Passwords for the first time in the dev preview finds it
- * already unlocked-ready and full (PIN 6666), the same as every other
- * screen the fake data touches, without going through VaultLock's real
- * first-use setup flow.
+ * lock with DEV_DEMO_SEQUENCE above and encrypts each sample entry under
+ * it — so opening it for the first time in the dev preview finds it
+ * already unlocked-ready and full (tap heart, star, sun, moon), the same
+ * as every other screen the fake data touches, without going through
+ * VaultLock's real first-use setup flow.
  *
  * Kept separate from `withFakeData` because encryption is async and that
  * one isn't; the call site awaits this as its own step.
@@ -379,7 +382,7 @@ export async function withFakeVaultData(db: DB): Promise<DB> {
   if (db.vaultSecurity || db.vaultItems.length || db.passwordItems.length) return db
 
   const salt = randomSaltB64()
-  const key = await deriveVaultKey(DEV_DEMO_PIN, salt)
+  const key = await deriveVaultKey(DEV_DEMO_PASSPHRASE, salt)
   const check = await encryptText(key, CANARY)
 
   const vaultItems: VaultItem[] = [

@@ -59,13 +59,13 @@ const PAGES: [string, ExtraPage, string][] = [
   // Right after Total — same reasoning as its position in the FAB fan in
   // App.tsx (MENU_ROWS): the two get opened for the same kind of reason
   // more often than either is opened next to Stats.
-  ['Kitee', 'kitee', 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z'],
+  ['Khushi', 'kitee', 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z'],
   ['Stats', 'stats', 'M5 20V12M9.7 20V4M14.3 20v-6M19 20V8'],
   ['Accounts', 'accounts',
     'M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4zM4 6.5v5C4 12.9 7.6 14 12 14s8-1.1 8-2.5v-5M4 11.5v5C4 17.9 7.6 19 12 19s8-1.1 8-2.5v-5'],
   ['Loans', 'loans', 'M3 10h18M3 10l2-5h14l2 5M5 10v9h14v-9M9 14h6'],
-  ['Stock', 'stock', 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10'],
-  ['Last Done', 'lastDone',
+  ['Taruna', 'stock', 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10'],
+  ['Muskan', 'lastDone',
     'M8 2v4M16 2v4M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM9 16l2 2 4-4'],
 ]
 

@@ -74,9 +74,9 @@ const EXTRA_TITLE: Record<ExtraPage, string> = {
   accounts: 'Accounts',
   total: 'Total',
   loans: 'Loans',
-  stock: 'Stock',
-  lastDone: 'Last Done',
-  kitee: 'Kitee',
+  stock: 'Taruna',
+  lastDone: 'Muskan',
+  kitee: 'Khushi',
 }
 
 /** A lotus, a shark and a cat — pixel sprites, one per tab. */
@@ -87,8 +87,8 @@ const TAB_ART: Record<Tab, PixelArt> = {
 }
 
 const TAB_LABEL: Record<Tab, string> = {
-  'Trans.': 'Train',
-  Authentication: 'Pinly',
+  'Trans.': 'Somya',
+  Authentication: 'Shafali',
   More: 'More',
 }
 
@@ -260,10 +260,10 @@ const MENU_ROWS: [string, ExtraPage | 'settings', LucideIcon][] = [
   ['Stats', 'stats', BarChart3],
   ['Accounts', 'accounts', Landmark],
   ['Loans', 'loans', HandCoins],
-  ['Stock', 'stock', Package],
-  ['Last Done', 'lastDone', History],
+  ['Taruna', 'stock', Package],
+  ['Muskan', 'lastDone', History],
   // Last in the list — bottom of the hold-and-drag menu, right above Settings.
-  ['Kitee', 'kitee', Star],
+  ['Khushi', 'kitee', Star],
   ['Settings', 'settings', SettingsIcon],
 ]
 
@@ -928,7 +928,7 @@ function Shell() {
 
           {tab === 'Authentication' && (
             <div className="flex items-center px-4 bar-row">
-              <span className="t-title flex-1">Vault</span>
+              <span className="t-title flex-1">Shafali</span>
             </div>
           )}
 

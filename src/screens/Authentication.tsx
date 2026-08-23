@@ -23,10 +23,27 @@ import { fileToAttachment, fileToPhoto, isPdfDataUrl } from '../lib/photo'
 import { renderPdfPage } from '../lib/pdf'
 import { sharePhotos } from '../lib/share'
 import { speakCharacters, type SpeechHandle } from '../lib/speak'
-import { hapticError, hapticMedium } from '../lib/haptics'
+import { hapticError, hapticLight, hapticMedium } from '../lib/haptics'
+import { Heart, Star, Sun, Moon, Leaf, Anchor, Camera, Music2, Umbrella, type LucideIcon } from 'lucide-react'
 
-import { CANARY } from '../lib/vaultConst'
+import { CANARY, LOCK_ICON_IDS, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
 import { usePersistedFold } from '../lib/usePersistedFold'
+
+/** Which glyph each id in LOCK_ICON_IDS (vaultConst.ts) actually draws. Kept
+ *  here rather than in that shared module since it's the one thing that
+ *  needs lucide-react, and fakeData.ts — the module's other consumer —
+ *  never renders anything. */
+const LOCK_ICON_MAP: Record<LockIconId, LucideIcon> = {
+  heart: Heart,
+  star: Star,
+  sun: Sun,
+  moon: Moon,
+  leaf: Leaf,
+  anchor: Anchor,
+  camera: Camera,
+  music: Music2,
+  umbrella: Umbrella,
+}
 
 type InnerTab = 'Vault' | 'Passwords' | 'Documents'
 const INNER_TABS: InnerTab[] = ['Vault', 'Passwords', 'Documents']
@@ -620,7 +637,7 @@ export function Authentication({
           className="w-8 h-8 shrink-0 flex items-center justify-center text-[15px] rounded-full"
           style={{ color: 'var(--muted)' }}
           onClick={() => setKey(null)}
-          aria-label="Lock vault"
+          aria-label="Lock Shafali"
         >
           🔒
         </button>
@@ -642,37 +659,49 @@ export function Authentication({
 
 /* ------------------------------- Lock ------------------------------- */
 
-const PIN_LEN = 4
+const SEQUENCE_LEN = 4
 
 function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
-  const { db, setVaultSecurity } = useStore()
-  const [pin, setPin] = useState('')
+  const { db, setVaultSecurity, resetVault } = useStore()
+  const [sequence, setSequence] = useState<LockIconId[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
 
-  // First-ever visit: no lock exists yet, so this same screen doubles as
-  // setup — pick a PIN, then type it again to confirm, rather than
-  // silently provisioning one nobody actually chose. `firstPin` holds what
-  // was typed on the first pass while the second one is entered; it is
-  // never written anywhere and means nothing once setup finishes.
-  //
-  // There is deliberately still no "forgot PIN" recovery — same as before,
-  // just with a real consequence now: forgetting a PIN only you chose locks
-  // the vault for good, where forgetting the old fixed 6666 never could.
-  const setupNeeded = !db.vaultSecurity
-  const [firstPin, setFirstPin] = useState<string | null>(null)
-  const confirming = setupNeeded && firstPin !== null
+  // Escape hatch for a lock nobody can reproduce any more — most likely an
+  // install that set a digit PIN under the old scheme, before this screen
+  // moved to a tapped icon sequence, and has no way to type digits into it
+  // any more to prove they know it. Wipes vaultSecurity along with
+  // vaultItems/passwordItems (see resetVault in store.tsx) rather than just
+  // the lock, since anything encrypted under the unrecoverable key is
+  // already permanently unreadable regardless — keeping the ciphertext
+  // around serves nothing once the key that opened it is gone.
+  const [confirmReset, setConfirmReset] = useState(false)
 
-  const provision = async (chosen: string) => {
+  // First-ever visit: no lock exists yet, so this same screen doubles as
+  // setup — pick four icons, in order, then tap the same four again to
+  // confirm, rather than silently provisioning a lock nobody actually
+  // chose. `firstSequence` holds what was tapped on the first pass while
+  // the second one is entered; it is never written anywhere and means
+  // nothing once setup finishes.
+  //
+  // There is deliberately still no "forgot it" recovery — same as before,
+  // just with a real consequence now: forgetting a sequence only you chose
+  // locks the vault for good, where forgetting the old fixed 6666 never
+  // could.
+  const setupNeeded = !db.vaultSecurity
+  const [firstSequence, setFirstSequence] = useState<LockIconId[] | null>(null)
+  const confirming = setupNeeded && firstSequence !== null
+
+  const provision = async (chosen: LockIconId[]) => {
     setBusy(true)
     const salt = randomSaltB64()
-    const key = await deriveVaultKey(chosen, salt)
+    const key = await deriveVaultKey(sequenceToPassphrase(chosen), salt)
     const check = await encryptText(key, CANARY)
     setVaultSecurity({ salt, check })
-    // Same as unlocking right after — no reason to make the owner type the
-    // PIN they just chose a third time.
+    // Same as unlocking right after — no reason to make the owner tap the
+    // sequence they just chose a third time.
     hapticMedium()
     onUnlock(key)
   }
@@ -691,72 +720,75 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
    */
   const playUnlock = () => Promise.resolve()
 
-  const tryUnlock = async (entered: string) => {
+  const tryUnlock = async (entered: LockIconId[]) => {
     if (!db.vaultSecurity) return
     setBusy(true)
     setError('')
     try {
-      const key = await deriveVaultKey(entered, db.vaultSecurity.salt)
+      const key = await deriveVaultKey(sequenceToPassphrase(entered), db.vaultSecurity.salt)
       const decoded = await decryptText(key, db.vaultSecurity.check)
       if (decoded !== CANARY) throw new Error('mismatch')
-      // Only after the PIN is known good — a wrong PIN must still fail
+      // Only after the sequence is known good — a wrong one must still fail
       // instantly, with the shake and nothing else. Playing this first would
-      // have made every typo take three quarters of a second to be told about.
+      // have made every mistake take three quarters of a second to be told about.
       hapticMedium()
       await playUnlock()
       onUnlock(key)
     } catch {
       // The one unambiguous failure on this screen. The card's red flash is
-      // easy to miss when you are looking at the keypad, not the card.
+      // easy to miss when you are looking at the icon grid, not the card.
       hapticError()
-      setError('Wrong PIN')
-      setPin('')
+      setError('Wrong sequence')
+      setSequence([])
       setBusy(false)
     }
   }
 
-  const onDigit = (d: string) => {
+  const onPick = (id: LockIconId) => {
     setError('')
+    hapticLight()
     // Purely appends — no side effect. `tryUnlock` used to be called from
-    // inside this updater, which meant it ran *twice* on every completed PIN:
-    // React deliberately double-invokes state updaters in development to
-    // catch exactly this kind of impurity, so the key derivation and the
-    // wrong-PIN branch both fired two times over. It went unnoticed while the
-    // only symptom was a doubled vibration nobody could distinguish from one;
-    // it is obvious the moment a wrong PIN buzzes the error pattern twice.
-    // Attempting the unlock belongs in the effect below, which reacts to the
-    // PIN being complete rather than doing work mid-update.
-    setPin((p) => (p.length >= PIN_LEN ? p : p + d))
+    // inside this updater, which meant it ran *twice* on every completed
+    // sequence: React deliberately double-invokes state updaters in
+    // development to catch exactly this kind of impurity, so the key
+    // derivation and the wrong-sequence branch both fired two times over.
+    // It went unnoticed while the only symptom was a doubled vibration
+    // nobody could distinguish from one; it is obvious the moment a wrong
+    // sequence buzzes the error pattern twice. Attempting the unlock
+    // belongs in the effect below, which reacts to the sequence being
+    // complete rather than doing work mid-update.
+    setSequence((s) => (s.length >= SEQUENCE_LEN ? s : [...s, id]))
   }
-  const onBackspace = () => setPin((p) => p.slice(0, -1))
+  const onBackspace = () => setSequence((s) => s.slice(0, -1))
 
-  // Fires once when the fourth digit lands. Keyed on the PIN itself rather
-  // than on a counter, so clearing it after a failure (setPin('') below) is
-  // what re-arms this for the next attempt. Branches three ways: a normal
-  // unlock, the first of the two setup passes (remember it, ask again), or
-  // the second (provision if it matches what was just typed, otherwise
-  // start setup over rather than silently keeping only one of the two).
+  // Fires once the fourth icon lands. Keyed on the sequence itself rather
+  // than on a counter, so clearing it after a failure (setSequence([])
+  // below) is what re-arms this for the next attempt. Branches three ways:
+  // a normal unlock, the first of the two setup passes (remember it, ask
+  // again), or the second (provision if it matches what was just tapped,
+  // otherwise start setup over rather than silently keeping only one of
+  // the two).
   useEffect(() => {
-    if (pin.length !== PIN_LEN) return
+    if (sequence.length !== SEQUENCE_LEN) return
     if (!setupNeeded) {
-      void tryUnlock(pin)
+      void tryUnlock(sequence)
       return
     }
     if (!confirming) {
-      setFirstPin(pin)
-      setPin('')
+      setFirstSequence(sequence)
+      setSequence([])
       return
     }
-    if (pin === firstPin) {
-      void provision(pin)
+    if (sequence.join() === firstSequence?.join()) {
+      void provision(sequence)
     } else {
       hapticError()
-      setError("PINs didn't match — try again")
-      setFirstPin(null)
-      setPin('')
+      setError("Didn't match — try again")
+      setFirstSequence(null)
+      setSequence([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pin])
+  }, [sequence])
 
   return (
     <div className="vault-lock">
@@ -774,11 +806,17 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
             — how much of the PIN is in — with a dotted arc under it, the way
             the reference puts its dotted curve beneath the readout. */}
         <div ref={heroRef} className="vault-hero" data-error={error ? true : undefined}>
-          <div className="vault-hero-label">Vault</div>
+          <div className="vault-hero-label">Shafali</div>
 
+          {/* Blank cells, not the icons themselves — the whole point of
+              picking icons instead of typing a PIN into a field in full
+              view is lost if the readout then displays exactly which four
+              were tapped for anyone glancing at the card instead of the
+              grid. Same "count, not content" property the digit PIN's
+              cells always had. */}
           <div className="vault-pin">
-            {Array.from({ length: PIN_LEN }, (_, i) => (
-              <span key={i} className="vault-pin-cell" data-on={i < pin.length || undefined} />
+            {Array.from({ length: SEQUENCE_LEN }, (_, i) => (
+              <span key={i} className="vault-pin-cell" data-on={i < sequence.length || undefined} />
             ))}
           </div>
 
@@ -791,14 +829,14 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
                 ? error
                 : setupNeeded
                   ? confirming
-                    ? 'Type it again to confirm'
-                    : 'Choose a 4-digit PIN'
+                    ? 'Tap the same four again to confirm'
+                    : 'Pick 4 icons, in order'
                   : 'Locked'}
           </div>
 
           {/* Dotted arcs, drawn rather than an image — three concentric
-              sweeps, the innermost brightening as the PIN fills so the card
-              itself registers progress and not just the cells. */}
+              sweeps, the innermost brightening as the sequence fills so the
+              card itself registers progress and not just the cells. */}
           {/* The viewBox is taller than the arcs reach, so the outermost ring
               lands inside it instead of being sliced through a row of dots at
               the card's edge. */}
@@ -809,7 +847,7 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
               return Array.from({ length: dots }, (_, i) => {
                 const t = i / (dots - 1)
                 const a = Math.PI * (1 - t)
-                const lit = ring === 0 && t <= pin.length / PIN_LEN
+                const lit = ring === 0 && t <= sequence.length / SEQUENCE_LEN
                 return (
                   <circle
                     key={`${ring}-${i}`}
@@ -826,25 +864,56 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
         </div>
 
         <div ref={keysRef} className="vault-keys">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map((k, i) =>
-            // The empty slot is a spacer, not a disabled key — rendered as a
-            // button it still picked up the global disabled styling and sat
-            // there looking like a control you were being refused.
-            k ? (
+          {LOCK_ICON_IDS.map((id) => {
+            const Icon = LOCK_ICON_MAP[id]
+            return (
               <button
-                key={i}
+                key={id}
                 className="vault-key"
+                aria-label={id}
                 disabled={busy}
-                onClick={() => (k === '⌫' ? onBackspace() : onDigit(k))}
+                onClick={() => onPick(id)}
               >
-                {k}
+                <Icon size={22} strokeWidth={2} />
               </button>
-            ) : (
-              <span key={i} aria-hidden />
-            ),
-          )}
+            )
+          })}
+          {/* Blank either side of backspace, not a disabled key — rendered
+              as a button it still picked up the global disabled styling and
+              sat there looking like a control you were being refused. */}
+          <span aria-hidden />
+          <button className="vault-key" disabled={busy} onClick={onBackspace} aria-label="Backspace">
+            ⌫
+          </button>
+          <span aria-hidden />
         </div>
+
+        {!setupNeeded && (
+          <button
+            className="text-[12px] underline"
+            style={{ color: 'rgb(255 255 255 / 0.55)' }}
+            onClick={() => setConfirmReset(true)}
+          >
+            Can't get in?
+          </button>
+        )}
       </div>
+
+      <Confirm
+        open={confirmReset}
+        title="Reset Shafali?"
+        body="Erases everything in Vault and Passwords for good, and lets you set a new sequence. Documents aren't behind this lock and are untouched. There is no way back in without it."
+        confirmLabel="Erase and start over"
+        danger
+        onClose={() => setConfirmReset(false)}
+        onConfirm={() => {
+          resetVault()
+          setConfirmReset(false)
+          setSequence([])
+          setFirstSequence(null)
+          setError('')
+        }}
+      />
     </div>
   )
 }

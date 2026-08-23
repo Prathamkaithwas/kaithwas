@@ -948,12 +948,15 @@ button:disabled {
 }
 
 /* ==========================================================================
-   Toast — a brief pill at the top of the screen (see components/Toast.tsx).
+   Toast — a brief pill above the nav bar (see components/Toast.tsx).
    z-[70], above Confirm's z-60 and Sheet's z-50: a toast can legitimately
    fire while either is open (saving a transaction closes its own sheet in
    the same action) and must not be trapped behind the thing that triggered
-   it. `pointer-events: none` on the stack, `auto` on each toast, so an empty
-   stretch of the stack never intercepts a tap meant for whatever's under it.
+   it. `pointer-events: none` on both the stack and the toast itself — it is
+   a pure notification with nothing to tap (no dismiss button, no onClick),
+   so the pill claiming touches did nothing but sit in the way of whatever
+   real button happens to be under it, right above the nav bar where one
+   often is.
    ========================================================================== */
 
 .toast-stack {
@@ -982,7 +985,7 @@ button:disabled {
   background: var(--surface);
   border: 1.5px solid var(--line);
   box-shadow: 0 10px 26px -12px rgba(0, 0, 0, 0.6);
-  pointer-events: auto;
+  pointer-events: none;
   animation: toast-in 220ms var(--ease-out) both;
 }
 .toast[data-leaving] {
@@ -1877,6 +1880,8 @@ button:disabled {
 .vault-key {
   position: relative;
   isolation: isolate;
+  display: grid;
+  place-items: center;
   height: 58px;
   border-radius: 999px;
   font-size: 21px;
@@ -5518,6 +5523,125 @@ button:disabled {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   border: 1.5px solid color-mix(in srgb, var(--accent) 30%, var(--surface));
+}
+
+/* ==========================================================================
+   TimeRuler — a strip of minutes you drag instead of a field you type into.
+   See components/TimeRuler.tsx for the drag math; this is only the paint.
+   ========================================================================== */
+
+.time-ruler-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  /* touch-action: none, not pan-x — a horizontal-only allowance still lets
+     the browser start its own scroll on the first move event, which races
+     the pointer handlers below for who owns the gesture. None hands the
+     whole thing to JS from the first pixel, same as the calculator keypad. */
+  touch-action: none;
+}
+
+.time-ruler-readout {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.time-ruler-ampm {
+  margin-left: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.time-ruler {
+  position: relative;
+  width: 100%;
+  height: 56px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: grab;
+}
+.time-ruler[data-dragging] {
+  cursor: grabbing;
+}
+
+/* The fixed pointer everything else slides underneath — a lit column, not
+   an arrow, so it reads as "this is the slot" rather than "this points at
+   something below." */
+.time-ruler-center {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  transform: translateX(-1px);
+  background: var(--accent);
+  border-radius: 1px;
+  z-index: 1;
+  pointer-events: none;
+}
+/* Fades the ruler's own edges rather than cutting them off square, so a
+   tick doesn't appear to be sliced by the container's bounds. */
+.time-ruler::before,
+.time-ruler::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  z-index: 2;
+  pointer-events: none;
+}
+.time-ruler::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--surface-2), transparent);
+}
+.time-ruler::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--surface-2), transparent);
+}
+
+.time-ruler-track {
+  position: absolute;
+  top: 0;
+  /* The centre pointer sits at 50% of the container; the track's own
+     minute-0 mark starts at the container's left edge, so shifting it
+     right by half the container width is what lines minute 0 up under the
+     centre before the live transform (in TimeRuler.tsx) takes over. */
+  left: 50%;
+  height: 100%;
+  will-change: transform;
+}
+
+.time-ruler-tick {
+  position: absolute;
+  bottom: 10px;
+  width: 1px;
+  height: 8px;
+  background: var(--line-strong);
+}
+.time-ruler-tick[data-quarter] {
+  height: 12px;
+}
+.time-ruler-tick[data-hour] {
+  height: 18px;
+  width: 1.5px;
+  background: var(--text-2);
+}
+
+.time-ruler-label {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* ==========================================================================
