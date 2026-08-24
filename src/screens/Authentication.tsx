@@ -646,10 +646,25 @@ export function Authentication({
 const SEQUENCE_LEN = 4
 
 function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
-  const { db, setVaultSecurity } = useStore()
+  const { db, setVaultSecurity, resetVault } = useStore()
   const [sequence, setSequence] = useState<LockIconId[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  /**
+   * Wrong attempts this session, and the reset sheet they eventually offer.
+   *
+   * This escape hatch was built, removed, and is now back by explicit
+   * request — a lock provisioned by an older build of the app keeps its own
+   * sequence forever, because a fresh default is only ever written when
+   * there is no `vaultSecurity` at all. That leaves an owner who no longer
+   * remembers the old sequence with no way in and no way to start over.
+   *
+   * It stays hidden until something has actually gone wrong. Offering it on
+   * a clean lock screen advertises the one action here that destroys data,
+   * to someone who in all likelihood just wants to type their sequence.
+   */
+  const [wrongTries, setWrongTries] = useState(0)
+  const [resetOpen, setResetOpen] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
   const provisioning = useRef(false)
@@ -706,6 +721,7 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
       setError('Wrong sequence')
       setSequence([])
       setBusy(false)
+      setWrongTries((n) => n + 1)
     }
   }
 
@@ -789,7 +805,83 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
         <div ref={keysRef}>
           <VaultIconPad onPick={onPick} onBackspace={onBackspace} disabled={busy} />
         </div>
+
+        {/* Only after a wrong sequence — see the note on `wrongTries`. */}
+        {wrongTries > 0 && (
+          <button
+            className="vault-reset-link"
+            onClick={() => setResetOpen(true)}
+          >
+            Can't get in?
+          </button>
+        )}
       </div>
+
+      {resetOpen && (
+        <Sheet open onClose={() => setResetOpen(false)} title="Can't get in?">
+          <div className="p-4 space-y-4">
+            <div className="text-[14px] leading-relaxed" style={{ color: 'var(--text)' }}>
+              There is no way to recover the sequence itself. It was never
+              stored anywhere — not on the phone, not in a backup — which is
+              the whole reason the vault is worth anything.
+            </div>
+            <div className="text-[14px] leading-relaxed" style={{ color: 'var(--text)' }}>
+              What can be done is start the lock over. It goes back to the
+              default — <strong>four taps of the anchor</strong> — and you
+              can set your own from More → Configuration → Vault lock
+              afterwards.
+            </div>
+            {/* Said plainly and with real numbers rather than a vague
+                warning: these entries are encrypted with the key derived
+                from the old sequence, so they are already unreadable — the
+                reset removes them rather than leaving permanently
+                undecryptable rows sitting in the list. */}
+            <div
+              className="rounded-[var(--r-md)] p-3 text-[13px] leading-relaxed"
+              style={{
+                background: 'color-mix(in srgb, var(--expense) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--expense) 35%, transparent)',
+                color: 'var(--text)',
+              }}
+            >
+              This clears{' '}
+              <strong>
+                {db.vaultItems.length} saved{' '}
+                {db.vaultItems.length === 1 ? 'entry' : 'entries'}
+              </strong>{' '}
+              and{' '}
+              <strong>
+                {db.passwordItems.length}{' '}
+                {db.passwordItems.length === 1 ? 'password' : 'passwords'}
+              </strong>
+              . They cannot be decrypted without the old sequence, so they are
+              already lost either way.
+              <div className="mt-2" style={{ color: 'var(--muted)' }}>
+                Your {db.docItems.length} saved{' '}
+                {db.docItems.length === 1 ? 'document is' : 'documents are'} not
+                encrypted and {db.docItems.length === 1 ? 'stays' : 'stay'} put.
+                Nothing outside the vault is touched.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-[12px]" style={{ color: 'var(--muted)' }}>
+                hold to reset the lock
+              </span>
+              <HoldConfirm
+                label="Reset vault lock"
+                onConfirm={() => {
+                  resetVault()
+                  setResetOpen(false)
+                  setSequence([])
+                  setError('')
+                  setWrongTries(0)
+                }}
+              />
+            </div>
+          </div>
+        </Sheet>
+      )}
     </div>
   )
 }
