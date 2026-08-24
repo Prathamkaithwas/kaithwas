@@ -3606,17 +3606,151 @@ button:disabled {
   border-radius: var(--r-md);
   color: #fff;
 }
-.niba-card[data-tone='0'] {
+/* ==========================================================================
+   Note skins.
+
+   The cards used to be four flat gradients a shade off the screen behind
+   them, which is why a page of notes read as one pale wash. Each skin is a
+   gradient plus two layers on top: a soft corner sheen, and a fine diagonal
+   weave. Both are cheap, static, and are what make the card read as a
+   surface catching light rather than a rectangle of colour.
+
+   The first four are the original tones, named so a note can pin one
+   instead of having it shift whenever the list reorders.
+   ========================================================================== */
+
+.niba-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Light from the top-left corner, falling off before the middle — the
+     same direction every card is lit from, so a column of them reads as one
+     scene rather than ten unrelated tiles. */
+  background: radial-gradient(
+    120% 90% at 8% 0%,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.07) 42%,
+    transparent 72%
+  );
+}
+.niba-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.5;
+  background:
+    repeating-linear-gradient(
+      58deg,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      transparent 1px,
+      transparent 5px
+    ),
+    repeating-linear-gradient(
+      -58deg,
+      rgba(0, 0, 0, 0.05) 0px,
+      rgba(0, 0, 0, 0.05) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+}
+/* Content has to clear both pseudo-elements. */
+.niba-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.niba-card[data-skin='blossom'] {
   background: linear-gradient(155deg, #f4a4c0 0%, #e8799f 100%);
 }
-.niba-card[data-tone='1'] {
+.niba-card[data-skin='orchid'] {
   background: linear-gradient(155deg, #b07dd6 0%, #8a5ec4 100%);
 }
-.niba-card[data-tone='2'] {
+.niba-card[data-skin='iris'] {
   background: linear-gradient(155deg, #7c7ce0 0%, #5a56c9 100%);
 }
-.niba-card[data-tone='3'] {
+.niba-card[data-skin='dusk'] {
   background: linear-gradient(155deg, #5f5aa8 0%, #423c82 100%);
+}
+.niba-card[data-skin='sunset'] {
+  background: linear-gradient(155deg, #ffa96b 0%, #f2673f 55%, #d8386b 100%);
+}
+.niba-card[data-skin='ocean'] {
+  background: linear-gradient(155deg, #4fd3d0 0%, #2a8fc4 60%, #1c5f9e 100%);
+}
+.niba-card[data-skin='forest'] {
+  background: linear-gradient(155deg, #7fd68a 0%, #3fa66a 55%, #26714f 100%);
+}
+.niba-card[data-skin='ember'] {
+  background: linear-gradient(155deg, #f0794f 0%, #c22f3d 60%, #7d1230 100%);
+}
+.niba-card[data-skin='gold'] {
+  background: linear-gradient(155deg, #ffd98a 0%, #e8a33c 55%, #b4701c 100%);
+  color: #2c1b06;
+}
+/* The one dark skin. Its own hairline, because a near-black card on a dark
+   screen otherwise has no edge at all. */
+.niba-card[data-skin='ink'] {
+  background: linear-gradient(155deg, #3b4256 0%, #232838 60%, #14161f 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.11);
+}
+
+/* A photo of the owner's own. The scrim is not optional — a note has to stay
+   readable over a picture nobody vetted for contrast. */
+.niba-card[data-skin='custom'] {
+  background-image: linear-gradient(155deg, rgba(10, 8, 20, 0.72), rgba(10, 8, 20, 0.5)),
+    var(--shot);
+  background-size: cover;
+  background-position: center;
+}
+.niba-card[data-skin='custom']::after {
+  opacity: 0.25;
+}
+
+/* The picker in the note editor — real swatches, since these differ mostly
+   in how they shade and a flat dot cannot show that. */
+.niba-skins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.niba-skin {
+  width: 40px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid transparent;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.niba-skin[data-on] {
+  border-color: var(--text);
+}
+.niba-skin[data-skin='blossom'] { background: linear-gradient(155deg, #f4a4c0, #e8799f); }
+.niba-skin[data-skin='orchid'] { background: linear-gradient(155deg, #b07dd6, #8a5ec4); }
+.niba-skin[data-skin='iris'] { background: linear-gradient(155deg, #7c7ce0, #5a56c9); }
+.niba-skin[data-skin='dusk'] { background: linear-gradient(155deg, #5f5aa8, #423c82); }
+.niba-skin[data-skin='sunset'] { background: linear-gradient(155deg, #ffa96b, #f2673f 55%, #d8386b); }
+.niba-skin[data-skin='ocean'] { background: linear-gradient(155deg, #4fd3d0, #2a8fc4 60%, #1c5f9e); }
+.niba-skin[data-skin='forest'] { background: linear-gradient(155deg, #7fd68a, #3fa66a 55%, #26714f); }
+.niba-skin[data-skin='ember'] { background: linear-gradient(155deg, #f0794f, #c22f3d 60%, #7d1230); }
+.niba-skin[data-skin='gold'] { background: linear-gradient(155deg, #ffd98a, #e8a33c 55%, #b4701c); }
+.niba-skin[data-skin='ink'] { background: linear-gradient(155deg, #3b4256, #232838 60%, #14161f); }
+.niba-skin-auto,
+.niba-skin-custom {
+  background: var(--bg);
+  border: 2px dashed var(--line-strong);
+}
+.niba-skin-custom[data-on],
+.niba-skin-auto[data-on] {
+  border-style: solid;
+  border-color: var(--text);
 }
 
 .niba-card-title {

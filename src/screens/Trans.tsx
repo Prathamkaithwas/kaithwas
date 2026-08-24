@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ChecklistItem, Habit, Memo, Transaction } from '../types'
 import { FIELD_LABEL, TYPE_LABEL } from '../types'
 import { uid } from '../lib/seed'
@@ -29,7 +29,7 @@ import {
 } from '../lib/date'
 import { Bar, Empty, Money, Sheet, SummaryBar } from '../components/ui'
 import { TxRow } from '../components/TxRow'
-import { photosOf } from '../lib/photo'
+import { fileToPhoto, photosOf } from '../lib/photo'
 
 // Total, Loans, Stats, Accounts, Stock, Last Done and Kitee now live in the
 // More menu — they are looked at occasionally, and giving them permanent
@@ -675,6 +675,44 @@ function TotalOverview({
 /** How many gradient tones the note cards cycle through before repeating. */
 const NIBA_TONES = 4
 
+/**
+ * The skins a note card can wear.
+ *
+ * The first four are the tones the cards already cycled through, given names
+ * so one can be pinned to a note rather than shifting whenever the list
+ * reorders. The rest are new, and deliberately not more of the same violets —
+ * the complaint was that a page of notes read as one pale wash, which is what
+ * happens when every card is a neighbouring shade of the screen behind it.
+ *
+ * Each is a gradient plus a sheen and a texture (see .niba-card in
+ * index.css), so they read as a surface rather than a flat fill.
+ */
+export const NOTE_SKINS = [
+  'blossom',
+  'orchid',
+  'iris',
+  'dusk',
+  'sunset',
+  'ocean',
+  'forest',
+  'ember',
+  'gold',
+  'ink',
+] as const
+
+export const NOTE_SKIN_LABEL: Record<string, string> = {
+  blossom: 'Blossom',
+  orchid: 'Orchid',
+  iris: 'Iris',
+  dusk: 'Dusk',
+  sunset: 'Sunset',
+  ocean: 'Ocean',
+  forest: 'Forest',
+  ember: 'Ember',
+  gold: 'Gold',
+  ink: 'Ink',
+}
+
 function StarIcon({ filled }: { filled: boolean }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
@@ -753,7 +791,15 @@ function NoteView({
                 <button
                   key={m.id}
                   className="niba-card w-full text-left mb-3"
-                  data-tone={tone}
+                  // An unset skin still cycles through the original four by
+                  // position, so notes written before skins existed look
+                  // exactly as they did.
+                  data-skin={m.skin ?? NOTE_SKINS[tone]}
+                  style={
+                    m.skin === 'custom' && m.customSkinImage
+                      ? ({ '--shot': `url(${m.customSkinImage})` } as React.CSSProperties)
+                      : undefined
+                  }
                   onClick={() => setOpen(m)}
                 >
                   <span
@@ -841,6 +887,10 @@ function MemoEditor({
   const [body, setBody] = useState(memo?.body ?? '')
   const [checklist, setChecklist] = useState<ChecklistItem[]>(memo?.checklist ?? [])
   const [newItem, setNewItem] = useState('')
+  const [skin, setSkin] = useState<string | undefined>(memo?.skin)
+  const [customSkinImage, setCustomSkinImage] = useState(memo?.customSkinImage)
+  const [skinBusy, setSkinBusy] = useState(false)
+  const skinFileRef = useRef<HTMLInputElement>(null)
 
   const addItem = () => {
     const text = newItem.trim()
@@ -856,7 +906,14 @@ function MemoEditor({
 
   const save = () => {
     if (!title.trim() && !body.trim() && checklist.length === 0) return onClose()
-    const payload = { date, title, body, checklist: checklist.length ? checklist : undefined }
+    const payload = {
+      date,
+      title,
+      body,
+      checklist: checklist.length ? checklist : undefined,
+      skin,
+      customSkinImage,
+    }
     if (memo) updateMemo({ ...memo, ...payload })
     else addMemo(payload)
     onClose()
@@ -893,6 +950,75 @@ function MemoEditor({
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
+
+          {/* The card's skin, previewed as the actual swatch it will wear
+              rather than a colour dot — the gradients differ mostly in how
+              they shade, which a flat dot cannot show. */}
+          <div>
+            <div className="text-[11px] mb-1.5" style={{ color: 'var(--muted)' }}>
+              Card skin
+            </div>
+            <div className="niba-skins">
+              <button
+                className="niba-skin niba-skin-auto"
+                data-on={skin === undefined || undefined}
+                onClick={() => setSkin(undefined)}
+                aria-label="Automatic skin"
+                aria-pressed={skin === undefined}
+              >
+                Auto
+              </button>
+              {NOTE_SKINS.map((sk) => (
+                <button
+                  key={sk}
+                  className="niba-skin"
+                  data-skin={sk}
+                  data-on={skin === sk || undefined}
+                  onClick={() => setSkin(sk)}
+                  aria-label={NOTE_SKIN_LABEL[sk]}
+                  aria-pressed={skin === sk}
+                />
+              ))}
+              {/* Same "goes straight to the picker" rule as the habit
+                  surfaces — there is nothing to preview until a photo
+                  actually exists. */}
+              <button
+                className="niba-skin niba-skin-custom"
+                data-on={skin === 'custom' || undefined}
+                style={
+                  customSkinImage
+                    ? ({ backgroundImage: `url(${customSkinImage})` } as React.CSSProperties)
+                    : undefined
+                }
+                disabled={skinBusy}
+                onClick={() => skinFileRef.current?.click()}
+                aria-label="Custom photo skin"
+                aria-pressed={skin === 'custom'}
+              >
+                {skinBusy ? '…' : customSkinImage ? '' : 'Photo'}
+              </button>
+              <input
+                ref={skinFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!file) return
+                  setSkinBusy(true)
+                  try {
+                    setCustomSkinImage(await fileToPhoto(file))
+                    setSkin('custom')
+                  } catch {
+                    /* an unreadable file just leaves the previous skin alone */
+                  } finally {
+                    setSkinBusy(false)
+                  }
+                }}
+              />
+            </div>
+          </div>
 
           <div>
             <div className="text-[11px] mb-1.5" style={{ color: 'var(--muted)' }}>

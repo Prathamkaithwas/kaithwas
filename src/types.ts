@@ -353,6 +353,20 @@ export interface Memo {
   pinned?: boolean
   /** Optional checklist under the body — a shopping list inside a note rather than a separate to-do type. */
   checklist?: ChecklistItem[]
+  /**
+   * Which skin the card wears. Left unset it takes one from its position in
+   * the list, so a fresh set of notes is already varied without anyone
+   * choosing — same rule as a habit card's surface. Purely cosmetic, and an
+   * unknown name from a later build falls back to the plain card rather than
+   * rendering nothing. `'custom'` is the one value that isn't a built-in
+   * treatment — see customSkinImage below.
+   */
+  skin?: string
+  /** The photo behind the card when `skin === 'custom'` — a data URL, same
+   *  pipeline as every other photo in the app. Kept even if the owner
+   *  switches away and back, so trying a built-in skin and returning to
+   *  "Custom" doesn't lose the picture. */
+  customSkinImage?: string
 }
 
 /** A recurring habit / daily to-do, checked off day by day — the "Habits" tab. */
