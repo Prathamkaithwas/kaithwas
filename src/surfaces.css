@@ -32,6 +32,25 @@
   display: block;
 }
 
+/* -- 0. custom — the owner's own photo, not an animated treatment --------
+   No motion, no `data-held` reaction: a photo doesn't have a "press to see
+   it move" state the way the other eight do, so this one just sits there.
+   The gradient is what keeps the habit's name and streak readable over an
+   arbitrary picture instead of a colour that was tuned for legibility. */
+.habit-fx-custom {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.habit-tile[data-surface="custom"] .habit-fx::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.55) 100%);
+}
+
 /* -- 1. ordered dither ---------------------------------------------------
    A real dot grid, not noise: hard-edged pixels on a fixed lattice. The bloom
    is a radial mask crawling across it in stepped frames, so amber pixels

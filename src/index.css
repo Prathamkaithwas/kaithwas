@@ -4432,6 +4432,62 @@ button:disabled {
   color: var(--muted);
 }
 
+/* Every mood log, newest first, read as a running page rather than hunted
+   for one calendar square at a time. Same surface/line tokens as the stat
+   tiles and the calendar either side of it, so the three read as one
+   card-family rather than three different treatments. */
+.mood-journal {
+  max-height: 340px;
+  overflow-y: auto;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.mood-journal-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.mood-journal-row:last-child {
+  border-bottom: none;
+}
+.mood-journal-row[data-on] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mood-journal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mood-journal-date {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mood-journal-mood {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.mood-journal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mood-journal-note {
+  margin-top: 3px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
 /* 53 columns of 7. One scroller wraps both the month strip and the squares,
    so they are laid out in the same space and cannot drift apart; a year of
    readable squares is wider than a phone. */

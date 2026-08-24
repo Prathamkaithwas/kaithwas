@@ -370,9 +370,16 @@ export interface Habit {
    * Which surface treatment the card wears. Left unset the card takes one
    * from its position in the list, so a fresh set of habits is already varied
    * without anyone choosing. Purely cosmetic — an unknown name from a later
-   * build simply falls back to the plain card.
+   * build simply falls back to the plain card. `'custom'` is the one value
+   * that isn't a built-in animated treatment — see customSurfaceImage below.
    */
   surface?: string
+  /** The photo behind the card when `surface === 'custom'` — a data URL,
+   *  same pipeline as every other photo in the app (see lib/photo.ts).
+   *  Ignored for every other surface value; kept even if the owner switches
+   *  away and back, so trying a built-in surface and returning to "Custom"
+   *  doesn't lose the picture. */
+  customSurfaceImage?: string
   /**
    * Gives this habit's detail sheet the extra row of stats built for
    * Meditate — average/best session for a metered habit, longest streak and

@@ -12,6 +12,7 @@ import { Meter } from '../components/Meter'
 import { HABIT_ICON_IDS, HABIT_ICON_LABEL, HabitIcon } from '../lib/habitIcons'
 import { useCountUp } from '../lib/useCountUp'
 import { useToast } from '../components/Toast'
+import { fileToPhoto } from '../lib/photo'
 
 /** How many days each tile's dot row shows. */
 const RECENT_DAYS = 14
@@ -462,6 +463,45 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
           {stat(weekTypical?.label ?? '—', 'most this week')}
         </div>
 
+        {/* Every day, in order, read straight down rather than hunted for
+            one calendar square at a time — the calendar below is for seeing
+            the shape of a month at a glance; this is for actually reading
+            what was written. Tapping a line opens it the same way tapping
+            its square does. */}
+        {db.moodLogs.length > 0 && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wide mb-1.5" style={{ color: 'var(--muted)' }}>
+              Journal
+            </div>
+            <div className="mood-journal">
+              {[...db.moodLogs]
+                .sort((a, b) => (a.date < b.date ? 1 : -1))
+                .map((log) => {
+                  const def = moodDef(db.moods, log.level)
+                  return (
+                    <button
+                      key={log.date}
+                      className="mood-journal-row"
+                      data-on={log.date === editing || undefined}
+                      onClick={() => setEditing(log.date)}
+                    >
+                      <div className="mood-journal-head">
+                        <span className="mood-journal-date">
+                          {log.date === today ? 'Today' : dayLabel(log.date)}
+                        </span>
+                        <span className="mood-journal-mood">
+                          <span className="mood-journal-dot" style={{ background: def.color }} aria-hidden />
+                          {def.label || '—'}
+                        </span>
+                      </div>
+                      {log.note && <div className="mood-journal-note">{log.note}</div>}
+                    </button>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
         <div className="ld-cal cal-glass" ref={cal}>
           <div className="ld-cal-inner">
             <div className="ld-months">
@@ -683,10 +723,19 @@ function HabitTile({
       }
     >
       {/* The surface. Its own clipped layer so the tile itself can stay
-          unclipped for the tick's particle burst. */}
+          unclipped for the tick's particle burst. `custom` swaps the two
+          throwaway animated layers for the owner's own photo — everything
+          else about the tile (the darkening overlay so the name and streak
+          stay legible over it, the same z-index) is unchanged. */}
       <span className="habit-fx" aria-hidden>
-        <i />
-        <b />
+        {surface === 'custom' && habit.customSurfaceImage ? (
+          <img className="habit-fx-custom" src={habit.customSurfaceImage} alt="" />
+        ) : (
+          <>
+            <i />
+            <b />
+          </>
+        )}
       </span>
       {/* Covers the tile so anywhere that is not the tick opens the habit.
           A button inside a button is invalid, hence the overlay. */}
@@ -1037,6 +1086,9 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
   const [color, setColor] = useState(habit?.color ?? CHART_COLORS[0])
   const [icon, setIcon] = useState(habit?.icon ?? '')
   const [surface, setSurface] = useState<string | undefined>(habit?.surface)
+  const [customSurfaceImage, setCustomSurfaceImage] = useState(habit?.customSurfaceImage)
+  const [customBusy, setCustomBusy] = useState(false)
+  const customFileRef = useRef<HTMLInputElement>(null)
   const [metered, setMetered] = useState(!!habit?.unit)
   const [unit, setUnit] = useState(habit?.unit ?? 'min')
   const [target, setTarget] = useState(String(habit?.target ?? 30))
@@ -1056,6 +1108,7 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
       icon,
       color,
       surface,
+      customSurfaceImage,
       unit: metered ? unit.trim() || 'min' : undefined,
       target: metered ? targetNum : undefined,
       meditation,
@@ -1263,6 +1316,45 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
                 {sf}
               </button>
             ))}
+            {/* The one surface that isn't a built-in animated treatment —
+                a photo from the gallery instead, for whoever gets bored of
+                the eight on offer. Tapping it goes straight to the picker
+                rather than selecting an empty state first; there is nothing
+                to preview until a photo actually exists. */}
+            <button
+              className="px-3 py-1.5 rounded-full text-[12px] flex items-center gap-1.5"
+              style={{
+                background: surface === 'custom' ? 'var(--accent)' : 'var(--bg)',
+                color: surface === 'custom' ? '#fff' : 'var(--text-2)',
+              }}
+              disabled={customBusy}
+              onClick={() => customFileRef.current?.click()}
+            >
+              {customSurfaceImage && (
+                <img src={customSurfaceImage} alt="" className="w-4 h-4 rounded-full object-cover" />
+              )}
+              {customBusy ? 'Loading…' : customSurfaceImage ? 'Custom' : 'Custom…'}
+            </button>
+            <input
+              ref={customFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                setCustomBusy(true)
+                try {
+                  setCustomSurfaceImage(await fileToPhoto(file))
+                  setSurface('custom')
+                } catch {
+                  /* an unreadable file just leaves the previous surface in place */
+                } finally {
+                  setCustomBusy(false)
+                }
+              }}
+            />
           </div>
         </div>
 
