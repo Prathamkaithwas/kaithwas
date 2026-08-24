@@ -1,84 +1,85 @@
-import { useEffect, useRef, useState } from 'react'
-import { SLEEP_QUALITY_COLORS, SLEEP_QUALITY_LABEL, SLEEP_QUALITY_LEVELS, type SleepQuality } from '../types'
+import { useEffect, useId, useRef, useState } from 'react'
+import { SLEEP_QUALITY_LABEL, SLEEP_QUALITY_LEVELS, type SleepQuality } from '../types'
 import { hapticLight } from '../lib/haptics'
 
 /**
- * The moon, drawn at any point in its cycle rather than at five fixed ones.
+ * A moon at any point in its cycle.
  *
- * `phase` is continuous: 0 is a new moon buried in cloud, 1 is full with
- * stars out. That continuity is the whole point — the first version snapped
- * between five discrete drawings, so dragging the slider made the moon jump
- * in steps instead of actually waxing under your thumb.
- *
- * The shadow is a second circle of the same radius sliding off to the right,
- * which is how a real crescent is shaped and why the terminator stays curved
- * at every point in between rather than reading as a disc with a bite out.
+ * The shadow is cut with an SVG **mask**, not painted as a second circle in
+ * the background colour. The painted version only ever looked right on the
+ * one flat colour it was hard-coded to — over the gradient it sat as an
+ * opaque blob with a visible seam, which is what made the control read as
+ * half-finished. A mask makes the shadowed part genuinely transparent, so
+ * the crescent works over anything behind it.
  */
 export function MoonFace({
   phase,
   level,
   size = 26,
 }: {
-  /** 0–1. Takes precedence over `level` when both are given. */
+  /** 0–1, new moon to full. Takes precedence over `level`. */
   phase?: number
-  /** Convenience for the fixed positions — the journal list and tap targets. */
   level?: SleepQuality
   size?: number
 }) {
+  const uid = useId()
   const p = phase ?? (level ? phaseOf(level) : 0)
-  // r * 2 carries the shadow fully clear of the disc, so p === 1 is a clean
-  // full moon with no seam where the two circles part.
-  const shadowCx = 12 + p * 12.8
-  // Stars only once the sky is actually clearing — a star next to a clouded
-  // new moon reads as dirt on the screen, not weather.
-  const starGlow = Math.max(0, (p - 0.35) / 0.65)
-  const cloud = Math.max(0, (0.55 - p) / 0.55)
-
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      {STAR_SPOTS.map(([x, y, at], i) => (
-        <circle
-          key={i}
-          cx={x}
-          cy={y}
-          r={0.9}
-          fill="#fff"
-          // Staggered so they come out one after another as it clears
-          // rather than all three blinking on together.
-          opacity={Math.max(0, Math.min(1, (starGlow - at) * 3)) * 0.9}
-        />
-      ))}
-      <circle cx="12" cy="12" r="6.4" fill="currentColor" />
-      {p < 1 && <circle cx={shadowCx} cy="12" r="6.4" fill="var(--slp-deeper)" />}
-      {cloud > 0 && (
-        <ellipse cx="12.5" cy="15.5" rx="7.5" ry="2.6" fill="var(--slp-deeper)" opacity={cloud} />
-      )}
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden>
+      <defs>
+        <mask id={`m${uid}`}>
+          <circle cx="50" cy="50" r="30" fill="#fff" />
+          {/* Slides right as the moon waxes; at p=1 it is clear of the disc. */}
+          <circle cx={50 + p * 62} cy="50" r="30" fill="#000" />
+        </mask>
+        <radialGradient id={`g${uid}`} cx="38%" cy="34%">
+          <stop offset="0%" stopColor="#fffdf6" />
+          <stop offset="100%" stopColor="currentColor" />
+        </radialGradient>
+      </defs>
+      {/* Same earthshine disc as the big moon — see the note there. */}
+      <circle cx="50" cy="50" r="30" fill="currentColor" opacity="0.14" />
+      <circle cx="50" cy="50" r="30" fill={`url(#g${uid})`} mask={`url(#m${uid})`} />
     </svg>
   )
 }
 
-/** [x, y, when it lights up as `starGlow` climbs] */
-const STAR_SPOTS: [number, number, number][] = [
-  [3.2, 5.5, 0],
-  [20, 4, 0.25],
-  [21, 16, 0.55],
-]
-
-/** Where each named level sits on the 0–1 phase, evenly spaced so the moon
- *  advances by the same amount per step whichever two you drag between. */
+/** Evenly spaced, so the moon advances the same amount per step whichever
+ *  two levels you drag between. */
 function phaseOf(level: SleepQuality): number {
   return SLEEP_QUALITY_LEVELS.indexOf(level) / (SLEEP_QUALITY_LEVELS.length - 1)
 }
 
+/** [x%, y%, how far into the phase it lights up] — fixed rather than random
+ *  so the sky doesn't reshuffle on every render. */
+const STARS: [number, number, number][] = [
+  [9, 26, 0.15],
+  [21, 62, 0.45],
+  [33, 18, 0.3],
+  [67, 24, 0.35],
+  [79, 66, 0.5],
+  [90, 32, 0.2],
+  [58, 74, 0.6],
+  [15, 44, 0.55],
+]
+
 /**
- * How the night felt, on a five-point scale you drag or tap.
+ * How the night felt.
  *
- * Same control surface as the Deal slider, but the motion is its own: three
- * values are animated per frame off one spring each — the label chasing the
- * finger, the moon's phase, and the thumb's own position — rather than the
- * single linear lerp plus CSS transitions the first version used. Springs
- * are what make a release settle with a little weight behind it instead of
- * gliding to a stop on a fixed curve.
+ * Rebuilt from a five-moons-in-a-bar strip, which crammed five 18px glyphs
+ * and a thumb into 56px and read as muddy at every size. The moon is the
+ * whole point of the control, so it gets to be the size of one — one large
+ * moon over a lit scene, with a thin track underneath for position.
+ *
+ * The scene is lit by a single radial glow centred on the moon rather than
+ * a left-to-right dawn gradient. The gradient version was warm on one side
+ * and cold on the other at every rating, so the panel always looked like
+ * two halves of different designs stitched together.
+ *
+ * Every frame writes transforms and one custom property straight onto nodes
+ * this component owns through refs. Nothing reads `getComputedStyle` in the
+ * loop — the previous version did, which forced a synchronous style recalc
+ * sixty times a second and is most of why the motion felt rough.
  */
 export function SleepQualitySlider({
   value,
@@ -89,122 +90,91 @@ export function SleepQualitySlider({
   onChange: (v: SleepQuality | undefined) => void
   locked?: boolean
 }) {
-  const track = useRef<HTMLDivElement>(null)
-  const thumb = useRef<HTMLDivElement>(null)
-  const pop = useRef<HTMLDivElement>(null)
+  const scene = useRef<HTMLDivElement>(null)
+  const moonWrap = useRef<HTMLDivElement>(null)
+  const moonSvg = useRef<SVGCircleElement>(null)
+  const knob = useRef<HTMLDivElement>(null)
+  const fill = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const [held, setHeld] = useState(false)
-  const current = value
+  const uid = useId()
 
+  const current = value
   const index = current ? SLEEP_QUALITY_LEVELS.indexOf(current) : 2
-  const tone = current ? SLEEP_QUALITY_COLORS[current] : 'var(--slp-1)'
-  const step = 100 / SLEEP_QUALITY_LEVELS.length
+  const last = SLEEP_QUALITY_LEVELS.length - 1
 
   /* ------------------------------------------------------------------
-     Three springs, one rAF loop.
+     Two springs on one rAF loop.
 
-     `pos` is the thumb: stiff and barely damped, because it is the thing
-     under the finger and any visible lag there feels like the control is
-     ignoring you. `pop` is the label above it: looser, so it trails, leans
-     into the direction of travel and squashes while it catches up. `phase`
-     is the moon: loosest of the three, so the sky keeps changing for a beat
-     after you have stopped moving — that little bit of follow-through is
-     most of what reads as "alive" rather than "wired to a slider".
+     `pos` is where the knob sits, 0–1 across the track. It is stiff and
+     lightly damped: it is the thing under the finger, and lag there reads
+     as the control ignoring you.
 
-     All three are written straight onto nodes inside the frame. React only
-     hears about it when the *level* changes, which is at most four times
-     across the whole control.
+     `phase` is the moon. Looser and heavier, so the sky keeps settling for
+     a beat after the finger stops — that follow-through is what separates
+     "animated" from "wired directly to a slider".
      ------------------------------------------------------------------ */
-  const box = useRef<DOMRect | null>(null)
-  const spring = (stiff: number, damp: number) => ({ at: 0, to: 0, vel: 0, stiff, damp })
-  const pos = useRef(spring(0.42, 0.62))
-  const popS = useRef(spring(0.2, 0.7))
-  const phase = useRef(spring(0.14, 0.74))
+  const mkSpring = (stiff: number, damp: number) => ({ at: 0.5, to: 0.5, vel: 0, stiff, damp })
+  const pos = useRef(mkSpring(0.34, 0.68))
+  const phase = useRef(mkSpring(0.13, 0.76))
   const frame = useRef(0)
 
-  /** One spring step. Returns true while it is still meaningfully moving. */
-  const advance = (s: { at: number; to: number; vel: number; stiff: number; damp: number }) => {
+  const step = (s: { at: number; to: number; vel: number; stiff: number; damp: number }) => {
     s.vel = (s.vel + (s.to - s.at) * s.stiff) * s.damp
     s.at += s.vel
-    return Math.abs(s.to - s.at) > 0.0005 || Math.abs(s.vel) > 0.0005
+    return Math.abs(s.to - s.at) > 0.0004 || Math.abs(s.vel) > 0.0004
+  }
+
+  /** Writes both springs onto the DOM. Called per frame, and once directly
+   *  on mount so the first paint is already correct. */
+  const paint = () => {
+    const p = Math.max(0, Math.min(1, phase.current.at))
+    const x = Math.max(0, Math.min(1, pos.current.at))
+
+    if (scene.current) scene.current.style.setProperty('--phase', p.toFixed(4))
+    if (moonSvg.current) moonSvg.current.setAttribute('cx', String(50 + p * 62))
+    // The moon drifts a little with the rating — rising as the night gets
+    // better. Small: it is a lit scene reacting, not a second slider.
+    if (moonWrap.current) {
+      moonWrap.current.style.transform = `translate(-50%, 0) translateY(${(1 - p) * 7}px)`
+    }
+    if (knob.current) knob.current.style.left = `${x * 100}%`
+    if (fill.current) fill.current.style.transform = `scaleX(${x})`
   }
 
   const tick = () => {
     frame.current = 0
-    const r = box.current
-    if (!r) return
-
-    const a = advance(pos.current)
-    const b = advance(popS.current)
-    const c = advance(phase.current)
-
-    if (thumb.current) {
-      thumb.current.style.setProperty('--drag-x', `${pos.current.at - (r.width * step) / 200}px`)
-    }
-    if (pop.current) {
-      // Lean and squash scale with how far behind the label is, so a fast
-      // flick visibly deforms it and a slow drag barely does.
-      const gap = popS.current.to - popS.current.at
-      const tilt = Math.max(-13, Math.min(13, gap * 0.45))
-      const push = Math.min(0.13, Math.abs(gap) * 0.0045)
-      pop.current.style.transform =
-        `translateX(${popS.current.at}px) translateX(-50%) rotate(${tilt}deg) scale(${1 + push}, ${1 - push})`
-    }
-    // The moon and the sky behind it both read off the same spring, so the
-    // glow blooms in step with the phase rather than on its own schedule.
-    if (track.current) {
-      track.current.style.setProperty('--phase', String(phase.current.at))
-    }
-
-    if (dragging.current || a || b || c) frame.current = requestAnimationFrame(tick)
+    const moving = [step(pos.current), step(phase.current)].some(Boolean)
+    paint()
+    if (dragging.current || moving) frame.current = requestAnimationFrame(tick)
   }
 
   const run = () => {
     if (!frame.current) frame.current = requestAnimationFrame(tick)
   }
 
-  // A save can close the editor mid-drag; leaving the loop running would
-  // keep writing to nodes that are no longer mounted.
   useEffect(() => () => { if (frame.current) cancelAnimationFrame(frame.current) }, [])
 
   /**
-   * Settles the springs onto whatever level is current whenever it changes
-   * from outside a drag — opening a night that already has a rating, or the
-   * Clear button putting it back to the middle.
-   *
-   * The very first run snaps rather than animates, and writes the phase
-   * straight onto the node instead of waiting for a frame. A night opened at
-   * "Great" should already *be* a full moon when the screen appears; playing
-   * the whole lunar cycle at it on every open is an animation nobody asked
-   * for, and it would show a wrong phase for the frame before the loop
-   * started either way.
+   * Settles onto whatever level is current when it changes from outside a
+   * drag. The first run snaps and paints immediately rather than animating:
+   * a night already rated "Great" should *be* a full moon when the screen
+   * appears, not play the whole lunar cycle at you on every open.
    */
   const settled = useRef(false)
   useEffect(() => {
-    const el = track.current
-    if (!el || dragging.current) return
-    // Re-measured rather than cached: the sheet this lives in animates open,
-    // so a width read on mount can be from mid-transition.
-    box.current = el.getBoundingClientRect()
-    const centre = (box.current.width * (index + 0.5)) / SLEEP_QUALITY_LEVELS.length
+    if (dragging.current) return
     const target = current ? phaseOf(current) : 0.5
-
-    pos.current.to = centre
-    popS.current.to = centre
+    const at = current ? index / last : 0.5
+    pos.current.to = at
     phase.current.to = target
-
     if (!settled.current) {
       settled.current = true
-      pos.current.at = centre
-      popS.current.at = centre
+      pos.current.at = at
       phase.current.at = target
-      el.style.setProperty('--phase', String(target))
-      if (thumb.current) {
-        thumb.current.style.setProperty(
-          '--drag-x',
-          `${centre - (box.current.width * step) / 200}px`,
-        )
-      }
+      pos.current.vel = 0
+      phase.current.vel = 0
+      paint()
       return
     }
     run()
@@ -212,27 +182,20 @@ export function SleepQualitySlider({
   }, [current, index])
 
   const pick = (clientX: number) => {
-    const el = track.current
+    const el = scene.current
     if (!el) return
-    const rect = box.current ?? el.getBoundingClientRect()
-    const x = Math.max(0, Math.min(rect.width, clientX - rect.left))
-    const i = Math.min(
-      SLEEP_QUALITY_LEVELS.length - 1,
-      Math.max(0, Math.floor((x / rect.width) * SLEEP_QUALITY_LEVELS.length)),
-    )
+    const r = el.getBoundingClientRect()
+    const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width))
 
-    // The thumb tracks the finger exactly; the label and the moon chase it.
-    // Snapping the thumb to `i` instead would make the control feel like it
-    // was correcting you mid-gesture.
-    pos.current.at = x
+    // The knob follows the finger exactly; the moon chases it. Snapping the
+    // knob to the nearest step mid-drag feels like being corrected.
+    pos.current.at = t
     pos.current.vel = 0
-    pos.current.to = x
-    popS.current.to = x
-    // The moon reads the raw finger position, not the landed step — that is
-    // what makes it wax continuously through a drag rather than in five jumps.
-    phase.current.to = x / rect.width
+    pos.current.to = t
+    phase.current.to = t
     run()
 
+    const i = Math.round(t * last)
     const next = SLEEP_QUALITY_LEVELS[i]
     if (next !== current) {
       hapticLight()
@@ -244,15 +207,10 @@ export function SleepQualitySlider({
     if (!dragging.current) return
     dragging.current = false
     setHeld(false)
-    const r = box.current
-    if (r) {
-      // Springs home to the level it landed on, rather than stopping dead
-      // wherever the finger happened to leave off.
-      const centre = (r.width * (index + 0.5)) / SLEEP_QUALITY_LEVELS.length
-      pos.current.to = centre
-      popS.current.to = centre
-      phase.current.to = current ? phaseOf(current) : 0.5
-    }
+    // Springs home to the level it landed on rather than stopping dead
+    // wherever the finger left off.
+    pos.current.to = index / last
+    phase.current.to = current ? phaseOf(current) : 0.5
     run()
   }
 
@@ -260,41 +218,28 @@ export function SleepQualitySlider({
     <div className="w-full">
       <div className="flex items-baseline justify-between mb-2">
         <span className="sleep-time-l">How was it?</span>
-        <div className="flex items-center gap-3">
-          <span
-            className="text-[14px] font-semibold"
-            style={{ color: tone, transition: 'color 260ms var(--ease-out)' }}
+        {current && !locked && (
+          <button
+            className="text-[13px] font-medium"
+            style={{ color: 'color-mix(in srgb, var(--slp-1) 55%, transparent)' }}
+            onClick={() => onChange(undefined)}
           >
-            {current ? SLEEP_QUALITY_LABEL[current] : 'Not rated'}
-          </span>
-          {current && !locked && (
-            <button
-              className="text-[13px] font-medium"
-              style={{ color: 'color-mix(in srgb, var(--slp-1) 55%, transparent)' }}
-              onClick={() => onChange(undefined)}
-            >
-              Clear
-            </button>
-          )}
-        </div>
+            Clear
+          </button>
+        )}
       </div>
 
       <div
-        ref={track}
-        className="sleep-qslider relative w-full select-none"
+        ref={scene}
+        className="sleep-scene"
         data-held={held || undefined}
-        style={{ height: 56, touchAction: 'none', opacity: locked ? 0.75 : 1 }}
+        data-locked={locked || undefined}
         onPointerDown={(e) => {
           if (locked) return
           e.stopPropagation()
           dragging.current = true
           setHeld(true)
           e.currentTarget.setPointerCapture(e.pointerId)
-          box.current = e.currentTarget.getBoundingClientRect()
-          // Start the label where the finger landed rather than flying it in
-          // from wherever it was last left.
-          popS.current.at = e.clientX - box.current.left
-          popS.current.vel = 0
           pick(e.clientX)
         }}
         onPointerMove={(e) => {
@@ -308,121 +253,100 @@ export function SleepQualitySlider({
         }}
         onPointerCancel={end}
       >
-        {/* The night sky. `--phase` is written per frame by the loop above,
-            so the dawn wash and the stars brighten continuously with the
-            drag instead of stepping between five fixed states. */}
-        <div className="sleep-qslider-sky absolute inset-0 rounded-[var(--r-md)]" aria-hidden>
-          <span className="sleep-qslider-dawn" />
-          {[10, 26, 44, 62, 80, 92].map((x, i) => (
+        {/* The lit sky. Both layers read --phase, so the whole panel warms
+            as one thing instead of one half warming and the other not. */}
+        <div className="sleep-scene-sky" aria-hidden />
+        <div className="sleep-scene-glow" aria-hidden />
+
+        <div className="sleep-scene-stars" aria-hidden>
+          {STARS.map(([x, y, at], i) => (
             <span
               key={i}
-              className="sleep-qslider-star"
+              className="sleep-scene-star"
               style={
                 {
                   left: `${x}%`,
-                  top: `${[30, 60, 20, 70, 45, 25][i]}%`,
-                  '--twinkle': `${(i * 0.37) % 1.6}s`,
+                  top: `${y}%`,
+                  '--at': at,
+                  '--tw': `${(i * 0.41) % 2.2}s`,
                 } as React.CSSProperties
               }
             />
           ))}
         </div>
 
-        <div ref={pop} className="sleep-qslider-pop" style={{ opacity: held ? 1 : 0 }} aria-hidden>
-          <span style={{ color: tone }}>
-            <MoonFace level={SLEEP_QUALITY_LEVELS[index]} size={20} />
-          </span>
-          {SLEEP_QUALITY_LABEL[SLEEP_QUALITY_LEVELS[index]]}
+        <div ref={moonWrap} className="sleep-scene-moon" aria-hidden>
+          <svg width="64" height="64" viewBox="0 0 100 100" fill="none">
+            <defs>
+              <mask id={`sm${uid}`}>
+                <circle cx="50" cy="50" r="30" fill="#fff" />
+                <circle ref={moonSvg} cx="50" cy="50" r="30" fill="#000" />
+              </mask>
+              <radialGradient id={`sg${uid}`} cx="36%" cy="32%">
+                <stop offset="0%" stopColor="#fffdf4" />
+                <stop offset="70%" stopColor="#f6dfae" />
+                <stop offset="100%" stopColor="#e0b978" />
+              </radialGradient>
+            </defs>
+            {/* Earthshine: the unlit part of a real moon is still a disc you
+                can see against the sky. Without this the whole moon simply
+                vanishes at "Rough" and the panel looks empty rather than
+                dark. Drawn under the crescent, so the lit edge stays clean. */}
+            <circle
+              cx="50"
+              cy="50"
+              r="30"
+              fill="#fff"
+              opacity="0.07"
+              stroke="#fff"
+              strokeOpacity="0.16"
+              strokeWidth="1.5"
+            />
+            <circle cx="50" cy="50" r="30" fill={`url(#sg${uid})`} mask={`url(#sm${uid})`} />
+          </svg>
         </div>
 
-        {/* The thumb. `--drag-x` is written imperatively every frame and wins
-            over the slot below it, so a re-render never fights the spring. */}
-        <div
-          ref={thumb}
-          className="sleep-qslider-thumb"
-          data-rated={current ? true : undefined}
-          style={{
-            width: `calc(${step}% - 6px)`,
-            left: `var(--drag-x, calc(${index * step}% + 3px))`,
-            '--tone': tone,
-            transform: held ? 'scale(1.08)' : 'scale(1)',
-          } as React.CSSProperties}
-        >
-          <span className="sleep-qslider-thumb-moon">
-            <LiveMoon track={track} />
-          </span>
+        <div className="sleep-scene-label">
+          {current ? SLEEP_QUALITY_LABEL[current] : 'Not rated'}
         </div>
 
-        {/* Tap targets over the top, so a straight tap on any level picks it
-            and each carries its own faint guide moon. */}
-        <div className="absolute inset-0 grid grid-cols-5">
-          {SLEEP_QUALITY_LEVELS.map((level, i) => (
+        {/* The track. Thin on purpose — the moon above already says what the
+            rating is, so this only has to say where you are in the range. */}
+        <div className="sleep-scene-track">
+          <div ref={fill} className="sleep-scene-fill" />
+          {SLEEP_QUALITY_LEVELS.map((lvl, i) => (
+            <span
+              key={lvl}
+              className="sleep-scene-tick"
+              data-on={i <= index || undefined}
+              style={{ left: `${(i / last) * 100}%` }}
+            />
+          ))}
+          <div ref={knob} className="sleep-scene-knob" />
+        </div>
+
+        {/* Real buttons over the track so each level is reachable by tap and
+            named for a screen reader — the drag is the fast path, this is
+            the obvious one. */}
+        <div className="sleep-scene-hits">
+          {SLEEP_QUALITY_LEVELS.map((lvl) => (
             <button
-              key={level}
-              className="flex items-center justify-center sleep-qslider-step"
-              style={{ opacity: i === index ? 0 : 1 }}
-              aria-label={SLEEP_QUALITY_LABEL[level]}
-              aria-pressed={level === current}
+              key={lvl}
+              type="button"
+              aria-label={SLEEP_QUALITY_LABEL[lvl]}
+              aria-pressed={lvl === current}
               disabled={locked}
               onClick={(e) => {
                 e.stopPropagation()
-                if (level !== current) {
+                if (lvl !== current) {
                   hapticLight()
-                  onChange(level)
+                  onChange(lvl)
                 }
               }}
-            >
-              <MoonFace level={level} size={18} />
-            </button>
+            />
           ))}
         </div>
       </div>
     </div>
-  )
-}
-
-/**
- * The moon riding on the thumb, redrawn every frame from the `--phase` the
- * animation loop writes onto the track.
- *
- * Reads the variable off the DOM rather than taking a prop, so the whole
- * per-frame path stays outside React — a `useState` here would re-render the
- * entire slider sixty times a second for one number that only this one
- * element needs.
- */
-function LiveMoon({ track }: { track: React.RefObject<HTMLDivElement | null> }) {
-  const host = useRef<SVGCircleElement>(null)
-  const cloud = useRef<SVGEllipseElement>(null)
-  const stars = useRef<SVGGElement>(null)
-  const raf = useRef(0)
-
-  useEffect(() => {
-    const loop = () => {
-      raf.current = requestAnimationFrame(loop)
-      const el = track.current
-      if (!el) return
-      const p = Number(getComputedStyle(el).getPropertyValue('--phase')) || 0
-      if (host.current) host.current.setAttribute('cx', String(12 + p * 12.8))
-      if (host.current) host.current.style.opacity = p >= 1 ? '0' : '1'
-      if (cloud.current) cloud.current.style.opacity = String(Math.max(0, (0.55 - p) / 0.55))
-      if (stars.current) {
-        stars.current.style.opacity = String(Math.max(0, Math.min(1, (p - 0.35) / 0.5)) * 0.9)
-      }
-    }
-    raf.current = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf.current)
-  }, [track])
-
-  return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <g ref={stars}>
-        {STAR_SPOTS.map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r={0.9} fill="#fff" />
-        ))}
-      </g>
-      <circle cx="12" cy="12" r="6.4" fill="currentColor" />
-      <circle ref={host} cx="12" cy="12" r="6.4" fill="var(--slp-deeper)" />
-      <ellipse ref={cloud} cx="12.5" cy="15.5" rx="7.5" ry="2.6" fill="var(--slp-deeper)" />
-    </svg>
   )
 }
