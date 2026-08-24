@@ -71,7 +71,10 @@
   /* Every top-bar row is exactly this tall, whatever it contains, so moving
      between tabs and sub-tabs never shifts the page under your thumb. */
   --bar-h: 52px;
-  --content-pb: calc(var(--nav-h) + var(--sab) + 76px);
+  /* Clears the Fab's full circle (64px tall, floating 26px above the nav
+     bar — see ui.tsx), plus a little more, so the last row of a list is
+     never the thing sitting directly behind the button. */
+  --content-pb: calc(var(--nav-h) + var(--sab) + 96px);
 
   /* Radii. Nudged up from the original 6/8/12 towards what iOS uses for
      grouped lists and sheets — softer corners without the pill-shaped,
@@ -2508,6 +2511,215 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* How the night felt — the Deal slider's own pinned-thumb drag/tap physics,
+   reskinned as a strip of night sky rather than a holographic surface. See
+   components/SleepQualitySlider.tsx; .holo/.deal-pop are that control's
+   equivalent classes. */
+/* `--phase` (0–1) is written onto .sleep-qslider every frame by the
+   component's own spring loop — every rule below reads off it, so the whole
+   strip brightens as one thing under the drag rather than each piece easing
+   on its own schedule. */
+.sleep-qslider {
+  --phase: 0.5;
+}
+.sleep-qslider-sky {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--slp-1) 12%, var(--slp-deeper)) 0%,
+    color-mix(in srgb, var(--slp-night) 52%, var(--slp-deeper)) 48%,
+    color-mix(in srgb, var(--slp-night) 46%, var(--slp-deeper)) 100%
+  );
+  border: 1.5px solid
+    color-mix(in srgb, var(--slp-1) calc(16% + var(--phase) * 22%), transparent);
+  transition: border-color 120ms linear;
+}
+/* The sunrise, washed in over the base sky rather than baked into it — its
+   opacity is the phase, so a great night actually warms the whole strip
+   while a rough one leaves it cold. */
+.sleep-qslider-dawn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    color-mix(in srgb, var(--slp-dawn-warm) 55%, transparent) 62%,
+    var(--slp-dawn) 100%
+  );
+  opacity: calc(var(--phase) * var(--phase));
+}
+.sleep-qslider-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.55);
+  /* Out only once the cloud has cleared — squared so they hold back through
+     the first half of the drag and then come out quickly. */
+  opacity: calc(var(--phase) * var(--phase) * 0.9);
+  animation: sleep-twinkle 2.6s ease-in-out infinite;
+  animation-delay: var(--twinkle, 0s);
+}
+@keyframes sleep-twinkle {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.7);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sleep-qslider-star {
+    animation: none;
+  }
+}
+
+/* The thumb. Its glow is the phase too, so the moon you are dragging
+   visibly gathers light as the night improves under it. */
+.sleep-qslider-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  pointer-events: none;
+  color: var(--slp-1);
+  background: color-mix(in srgb, var(--slp-1) 16%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--slp-1) 40%, transparent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  /* Only the press-scale is a transition — position is sprung per frame. */
+  transition:
+    transform 180ms var(--ease-out),
+    background-color 260ms var(--ease-out),
+    border-color 260ms var(--ease-out);
+}
+.sleep-qslider-thumb[data-rated] {
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) calc(10% + var(--phase) * 26%), transparent);
+  border-color: color-mix(in srgb, var(--tone) calc(45% + var(--phase) * 45%), transparent);
+  box-shadow:
+    0 0 calc(8px + var(--phase) * 26px) calc(var(--phase) * -2px)
+      color-mix(in srgb, var(--tone) calc(35% + var(--phase) * 55%), transparent),
+    0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.sleep-qslider-thumb-moon {
+  display: block;
+  filter: drop-shadow(0 0 calc(var(--phase) * 7px) color-mix(in srgb, var(--tone, #fff) 70%, transparent));
+}
+
+/* The five guide moons underneath. They fade rather than hard-swap to
+   transparent, so the one the thumb is covering slips away instead of
+   blinking out from under it. */
+.sleep-qslider-step {
+  color: color-mix(in srgb, var(--slp-1) 45%, transparent);
+  transition: opacity 200ms var(--ease-out);
+}
+
+.sleep-qslider-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px 6px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--slp-1);
+  background: color-mix(in srgb, var(--slp-deeper) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-1) 22%, transparent);
+  box-shadow: 0 8px 22px -10px rgba(0, 0, 0, 0.8);
+  transform-origin: center bottom;
+  pointer-events: none;
+  transition: opacity 130ms linear;
+}
+
+/* The dream note — same glass card as a time cell, a real textarea instead
+   of a native picker underneath it. */
+.sleep-dream {
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--slp-1) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-1) 14%, transparent);
+}
+.sleep-dream-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--slp-1);
+}
+.sleep-dream-input::placeholder {
+  color: color-mix(in srgb, var(--slp-1) 45%, transparent);
+}
+.sleep-dream-input:disabled {
+  opacity: 0.75;
+}
+
+/* The dream/quality journal — same shape as .mood-journal, restated for the
+   dark ground the way .sleep-cal restates .ld-cal just above it. */
+.sleep-journal {
+  max-height: 340px;
+  overflow-y: auto;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--slp-deeper) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--slp-1) 12%, transparent);
+}
+.sleep-journal-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--slp-1) 12%, transparent);
+}
+.sleep-journal-row:last-child {
+  border-bottom: none;
+}
+.sleep-journal-row[data-on] {
+  background: color-mix(in srgb, var(--slp-dawn) 12%, transparent);
+}
+.sleep-journal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sleep-journal-date {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--slp-1) 60%, transparent);
+}
+.sleep-journal-quality {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slp-dawn);
+  flex-shrink: 0;
+}
+.sleep-journal-note {
+  margin-top: 3px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--slp-1);
+  white-space: pre-wrap;
+}
+
 /* The one figure on the screen. No goal to be measured against — just what
    the last seven nights came to. */
 .sleep-avg {
@@ -4436,18 +4648,97 @@ button:disabled {
    for one calendar square at a time. Same surface/line tokens as the stat
    tiles and the calendar either side of it, so the three read as one
    card-family rather than three different treatments. */
+/* ==========================================================================
+   The day's reflection — the questions under the mood chips, and the
+   journal of everything answered so far.
+   ========================================================================== */
+
+.mood-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mood-prompt {
+  display: block;
+  padding: 11px 13px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.mood-prompt-q {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.mood-prompt-input {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text);
+  /* Grows with the answer instead of scrolling inside two fixed rows —
+     a reflection worth writing is usually longer than the box guesses. */
+  field-sizing: content;
+  min-height: 2.9em;
+}
+.mood-prompt-input::placeholder {
+  color: var(--line-strong);
+}
+.mood-prompt[data-read] .mood-prompt-a {
+  font-size: 14.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.mood-journal-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mood-journal-filter {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.mood-journal-filter[data-on] {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Taller than it was: the list is now the main way this sheet is read back,
+   not a footnote under the calendar, so it gets the room to be read in. */
 .mood-journal {
-  max-height: 340px;
+  max-height: 60vh;
   overflow-y: auto;
   border-radius: var(--r-md);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
+.mood-journal-empty {
+  padding: 18px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--muted);
+}
 .mood-journal-row {
+  position: relative;
   display: block;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
+  padding: 13px 14px 13px 20px;
   border-bottom: 1px solid var(--line);
 }
 .mood-journal-row:last-child {
@@ -4455,6 +4746,17 @@ button:disabled {
 }
 .mood-journal-row[data-on] {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+/* The mood's colour as a stripe down the entry's left edge — what tells one
+   day from the next when the list is a page of text rather than a row of
+   labels. Inset from the corners so it reads as a mark, not a border. */
+.mood-journal-edge {
+  position: absolute;
+  left: 8px;
+  top: 13px;
+  bottom: 13px;
+  width: 3px;
+  border-radius: 999px;
 }
 .mood-journal-head {
   display: flex;
@@ -4468,23 +4770,32 @@ button:disabled {
   color: var(--muted);
 }
 .mood-journal-mood {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   flex-shrink: 0;
 }
-.mood-journal-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
 .mood-journal-note {
-  margin-top: 3px;
-  font-size: 13.5px;
-  line-height: 1.4;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+/* Each answered question, question above answer — the question is set small
+   and muted so a column of them reads as the answers with labels rather
+   than as an interview transcript. */
+.mood-journal-qa {
+  margin-top: 8px;
+}
+.mood-journal-q {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  margin-bottom: 1px;
+}
+.mood-journal-a {
+  font-size: 14px;
+  line-height: 1.45;
   white-space: pre-wrap;
 }
 

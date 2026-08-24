@@ -61,6 +61,34 @@ export const DEAL_LABEL: Record<DealRating, string> = {
 }
 
 /**
+ * How a night felt, on the same five-point shape as a deal's rating —
+ * SleepQualitySlider is the Deal slider's own drag/tap mechanics, reskinned
+ * in moons rather than faces. Cloudy and dim at the "rough" end, a clear full
+ * moon with stars out at "great".
+ */
+export const SLEEP_QUALITY_LEVELS = ['rough', 'poor', 'okay', 'good', 'great'] as const
+export type SleepQuality = (typeof SLEEP_QUALITY_LEVELS)[number]
+
+export const SLEEP_QUALITY_LABEL: Record<SleepQuality, string> = {
+  rough: 'Rough',
+  poor: 'Poor',
+  okay: 'Okay',
+  good: 'Good',
+  great: 'Great',
+}
+
+/** Cloudy grey through to the sleep screen's own dawn gold — the same warm
+ *  the calendar squares brighten toward, so a great night's colour here
+ *  matches what a great night looks like everywhere else on the screen. */
+export const SLEEP_QUALITY_COLORS: Record<SleepQuality, string> = {
+  rough: '#6b6b85',
+  poor: '#8672a8',
+  okay: '#a488c9',
+  good: '#d9ac8a',
+  great: '#f8d299',
+}
+
+/**
  * The vocabulary for a day's mood — deliberately not the deal rating's
  * five-point good-to-bad scale reused wholesale. A day can be productive
  * without being great, or calm without being merely "okay" in the vague
@@ -126,6 +154,23 @@ export const DEFAULT_MOODS: MoodDef[] = MOOD_TAGS.map((id) => ({
   label: MOOD_WORD[id],
   color: MOOD_COLORS[id],
 }))
+
+/**
+ * What a fresh install asks after the mood is picked. Three, not one — a
+ * single "how was it" box gets answered "fine" forever, whereas a question
+ * that names what it wants ("what could have gone better") gets an actual
+ * answer. All three are editable and removable in Settings; these are only
+ * the starting point.
+ *
+ * Stable ids rather than generated ones, so the defaults keep their answers
+ * across a restore from backup — a generated id would orphan every previous
+ * answer the first time the database was rebuilt.
+ */
+export const DEFAULT_JOURNAL_PROMPTS: JournalPrompt[] = [
+  { id: 'remember', question: 'What is worth remembering about today?', order: 0 },
+  { id: 'improve', question: 'What could have gone better?', order: 1 },
+  { id: 'grateful', question: 'What are you thankful for?', order: 2 },
+]
 
 /** A restrained set of hues to offer when adding a mood — the same family
  *  the built-in nine already draw from, so a hand-picked one doesn't clash
@@ -390,6 +435,16 @@ export interface Habit {
    * name keeps working without anyone having to go flip a new switch.
    */
   meditation?: boolean
+  /**
+   * Clock times this habit should nudge at, every day — "HH:mm", sorted.
+   * A plain list rather than a "count + interval" shape: three doses five
+   * minutes apart is just three separate reminders that happen to be close
+   * together, and a plain list also covers three doses that *aren't* evenly
+   * spaced without needing a second, more complicated shape for that case.
+   * Absent or empty means no reminders, same as every habit before this
+   * existed. See lib/notifications.ts for what actually schedules these.
+   */
+  reminders?: string[]
 }
 
 /** One day a habit was marked done. */
@@ -482,6 +537,10 @@ export interface SleepLog {
   /** local ISO: YYYY-MM-DDTHH:mm */
   start: string
   end: string
+  /** How the night actually felt. Not every night gets rated. */
+  quality?: SleepQuality
+  /** What was remembered on waking, if anything. */
+  dream?: string
 }
 
 /**
@@ -499,6 +558,32 @@ export interface MoodLog {
   /** A MoodDef id — one of the default nine, or one the owner added. */
   level: string
   note?: string
+  /**
+   * The reflection prompts' answers, keyed by `JournalPrompt.id`.
+   *
+   * Keyed rather than a positional array so reordering the questions in
+   * Settings — or deleting one from the middle — never re-attaches an old
+   * answer to a different question. An answer whose prompt has since been
+   * deleted simply stops being rendered; it is deliberately left in the
+   * record rather than cleaned up, so restoring the question brings its
+   * history back with it.
+   */
+  answers?: Record<string, string>
+}
+
+/**
+ * One of the questions the Mood sheet asks after the day's mood is picked —
+ * "what's worth remembering", "what could have gone better".
+ *
+ * The list itself is data, editable in Settings, rather than a fixed set in
+ * the source: how many there are and what they ask are both the owner's
+ * call, and a shop's useful end-of-day questions are not the ones a note
+ * app would guess at.
+ */
+export interface JournalPrompt {
+  id: string
+  question: string
+  order: number
 }
 
 export type VaultCategory = 'bank' | 'card' | 'gst' | 'other'
@@ -677,6 +762,25 @@ export interface PurchaseItem {
   order: number
 }
 
+/**
+ * A supplier as its own entity — a phone number and whatever's worth
+ * remembering about them, separate from `PurchaseItem.supplier`.
+ *
+ * That field on a rate is deliberately left as free text (a name typed once,
+ * suggested from what's typed already) rather than a reference to this list —
+ * a rate is filed under a name, not under a phone number, and most of the
+ * time nobody needs more than the name. This exists for the other case: the
+ * supplier itself has a number to call and terms worth writing down, once,
+ * rather than repeated on every item they supply.
+ */
+export interface Supplier {
+  id: string
+  name: string
+  phone?: string
+  notes?: string
+  order: number
+}
+
 export interface Settings {
   currencySymbol: string
   symbolBefore: boolean
@@ -766,6 +870,8 @@ export interface DB {
   loans: Loan[]
   stockItems: StockItem[]
   purchaseItems: PurchaseItem[]
+  suppliers: Supplier[]
+  journalPrompts: JournalPrompt[]
   plannerTasks: PlannerTask[]
   settings: Settings
 }

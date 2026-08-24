@@ -332,6 +332,8 @@ export function importMmbak(bytes: Uint8Array): { db: DB; report: ImportReport }
       // brings any in — mergeIn keeps whatever is already recorded here.
       stockItems: [],
       purchaseItems: [],
+      suppliers: [],
+      journalPrompts: [],
       plannerTasks: [],
       settings,
     },

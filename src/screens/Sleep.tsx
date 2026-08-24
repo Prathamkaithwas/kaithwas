@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { SleepDial } from '../components/SleepDial'
+import { MoonFace, SleepQualitySlider } from '../components/SleepQualitySlider'
+import { SLEEP_QUALITY_LABEL } from '../types'
 import { EditLockButton } from '../components/ui'
-import { activityWeeks, addDays, dateToKey, MONTHS_SHORT, toLocalISO, todayKey, weeksToShow } from '../lib/date'
+import { activityWeeks, addDays, dateToKey, dayLabel, MONTHS_SHORT, toLocalISO, todayKey, weeksToShow } from '../lib/date'
 import {
   durationOf,
   hoursMinutes,
@@ -95,7 +97,7 @@ function SleepStarField() {
 }
 
 export function Sleep() {
-  const { db, saveSleep, removeSleep } = useStore()
+  const { db, saveSleep, removeSleep, setSleepQuality, setSleepDream } = useStore()
   // Back to the first night actually recorded, not a fixed year of mostly
   // empty columns — a tracker started this month shouldn't open on eleven
   // months of nothing.
@@ -141,6 +143,15 @@ export function Sleep() {
   const current = byNight.get(editing)
   const [draft, setDraft] = useState<{ startMin: number; endMin: number } | null>(null)
 
+  // The dream field, same pattern as Habits' mood note: a local draft that
+  // tracks whichever night is open, committed on blur rather than on every
+  // keystroke so typing doesn't spam a save through every stroke of a word.
+  const [dreamDraft, setDreamDraft] = useState(current?.dream ?? '')
+  useEffect(() => {
+    setDreamDraft(byNight.get(editing)?.dream ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
+
   // A night that already has a recorded time opens locked — view only, one
   // extra tap away from changing it — so scrolling past the dial or
   // catching the time cards with a stray thumb can't quietly overwrite a
@@ -167,6 +178,17 @@ export function Sleep() {
 
   const average = useMemo(() => recentAverage(db.sleepLogs, 7), [db.sleepLogs])
   const today = todayKey()
+
+  // Only nights with something actually written or rated on them — this is a
+  // dream/quality journal, not a second copy of the calendar above it, which
+  // already covers every recorded night.
+  const journal = useMemo(
+    () =>
+      db.sleepLogs
+        .filter((s) => s.dream || s.quality !== undefined)
+        .sort((a, b) => (a.date < b.date ? 1 : -1)),
+    [db.sleepLogs],
+  )
 
   const commit = (next: { startMin: number; endMin: number }) => {
     setDraft(next)
@@ -253,6 +275,35 @@ export function Sleep() {
           </div>
         </div>
 
+        {/* Quality and the dream note only appear once a night is actually on
+            the record — rating or writing down a dream with no recorded night
+            to attach it to doesn't mean anything. Same lock as the times
+            above them. */}
+        {current && (
+          <SleepQualitySlider
+            value={current.quality}
+            locked={!unlocked}
+            onChange={(q) => setSleepQuality(current.id, q)}
+          />
+        )}
+
+        {current && (
+          <div className="sleep-dream">
+            <span className="sleep-time-l">Dream</span>
+            <textarea
+              className="sleep-dream-input"
+              placeholder="Anything remembered? (optional)"
+              rows={3}
+              value={dreamDraft}
+              disabled={!unlocked}
+              onChange={(e) => setDreamDraft(e.target.value)}
+              onBlur={() => {
+                if (dreamDraft !== (current.dream ?? '')) setSleepDream(current.id, dreamDraft)
+              }}
+            />
+          </div>
+        )}
+
         {/* The only number that judges anything here. There is no goal to be
             short of — he does not keep one — so the average is simply what
             the last seven nights came to. */}
@@ -317,6 +368,42 @@ export function Sleep() {
             </div>
           </div>
         </div>
+
+        {/* Every rated or written-up night, newest first, read straight down
+            rather than hunted for one calendar square at a time — same shape
+            as the mood Journal on Habits. Tapping a line opens that night the
+            same way tapping its calendar square does. */}
+        {journal.length > 0 && (
+          <div>
+            <div className="text-[11px] uppercase tracking-wide mb-1.5 sleep-time-l">Dream journal</div>
+            <div className="sleep-journal">
+              {journal.map((log) => (
+                <button
+                  key={log.id}
+                  className="sleep-journal-row"
+                  data-on={log.date === editing || undefined}
+                  onClick={() => {
+                    setDraft(null)
+                    setEditing(log.date)
+                  }}
+                >
+                  <div className="sleep-journal-head">
+                    <span className="sleep-journal-date">
+                      {log.date === lastNight ? 'Last night' : dayLabel(log.date)}
+                    </span>
+                    {log.quality && (
+                      <span className="sleep-journal-quality">
+                        <MoonFace level={log.quality} size={14} />
+                        {SLEEP_QUALITY_LABEL[log.quality]}
+                      </span>
+                    )}
+                  </div>
+                  {log.dream && <div className="sleep-journal-note">{log.dream}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Behind the same lock as the dial and time cards — deleting a
             whole night is a bigger mistake than mistyping a time, and it

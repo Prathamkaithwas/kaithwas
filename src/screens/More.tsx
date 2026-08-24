@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Category, DB, ImportantDate, RepeatFreq, RepeatRule, Settings } from '../types'
-import { FIELD_LABEL, TYPE_LABEL } from '../types'
+import { DEFAULT_JOURNAL_PROMPTS, FIELD_LABEL, TYPE_LABEL } from '../types'
 import { useStore } from '../store'
 import { ACCENT_PRESETS } from '../lib/seed'
 import { formatAmount } from '../lib/money'
@@ -17,6 +17,7 @@ import { orderedTransTabs } from './Trans'
 import { decryptText, deriveVaultKey, encryptText, randomSaltB64 } from '../lib/crypto'
 import { CANARY, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
 import { VaultIconPad, VaultPinCells } from '../components/VaultIconPad'
+import { HoldConfirm } from '../components/HoldConfirm'
 import { hapticError, hapticLight, hapticMedium } from '../lib/haptics'
 
 type Page = null | 'config' | 'pc' | 'backup' | 'style' | 'help' | 'feedback'
@@ -153,6 +154,132 @@ function nextImportantLabel(dates: ImportantDate[]): string {
  * One-offs that have been and gone fall to a past section rather than
  * vanishing; yearly ones never expire, they just roll to next year.
  */
+/**
+ * The questions the Mood sheet asks each day, as an editable list.
+ *
+ * How many there are is simply how many are in this list — a separate
+ * "number of questions" control would either cap a list you can already see
+ * the length of, or contradict it. Adding one is what makes it four; deleting
+ * one is what makes it two.
+ *
+ * Editing happens in place, committed on blur, because the only thing a
+ * question has is its text and a whole editor sheet for one line would be
+ * more taps than rewriting it is worth.
+ */
+/** Only meaningful for a habit that carries a unit — a plain tick always
+ *  shows the full year. See the `range` line in Habits.tsx's detail sheet. */
+const HABIT_RANGE_LABEL: Record<'week' | 'month' | 'year', string> = {
+  week: 'A week',
+  month: 'A month',
+  year: 'A year',
+}
+
+function nextHabitRange(r: 'week' | 'month' | 'year'): 'week' | 'month' | 'year' {
+  return r === 'week' ? 'month' : r === 'month' ? 'year' : 'week'
+}
+
+function JournalPromptsSetting({ onBack }: { onBack: () => void }) {
+  const {
+    db,
+    addJournalPrompt,
+    updateJournalPrompt,
+    deleteJournalPrompt,
+    restoreDefaultJournalPrompts,
+  } = useStore()
+  const [adding, setAdding] = useState('')
+
+  const prompts = [...db.journalPrompts].sort((a, b) => a.order - b.order)
+  const missingDefaults = DEFAULT_JOURNAL_PROMPTS.some(
+    (d) => !db.journalPrompts.some((p) => p.id === d.id),
+  )
+
+  const commitNew = () => {
+    const q = adding.trim()
+    if (!q) return
+    addJournalPrompt(q)
+    setAdding('')
+  }
+
+  return (
+    <Screen title="Journal questions" onBack={onBack}>
+      <div className="px-4 py-3 text-[12.5px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+        Asked under the mood chips each day, in this order. Every answer is
+        kept with that day and shows in the Journal.
+      </div>
+
+      {prompts.map((p) => (
+        <div
+          key={p.id}
+          className="flex items-start gap-2 px-4 py-3 border-b"
+          style={{ background: 'var(--surface)', borderColor: 'var(--line)' }}
+        >
+          <textarea
+            className="flex-1 min-w-0 text-[14.5px] leading-relaxed resize-none bg-transparent"
+            // field-sizing is Chrome 123+; an older Android WebView ignores
+            // it and falls back to these two rows, which fit every default
+            // question and scroll for a longer one rather than clipping it.
+            style={{ color: 'var(--text)', fieldSizing: 'content' } as React.CSSProperties}
+            rows={2}
+            defaultValue={p.question}
+            onBlur={(e) => {
+              const q = e.target.value.trim()
+              // An emptied question is a delete by another name, but doing
+              // that silently on blur would destroy a day's worth of answers
+              // for a stray backspace — put the old text back instead and
+              // leave deleting to the button that says so.
+              if (!q) {
+                e.target.value = p.question
+                return
+              }
+              if (q !== p.question) updateJournalPrompt({ ...p, question: q })
+            }}
+          />
+          <div className="shrink-0 pt-1">
+            <HoldConfirm label={`Delete question`} onConfirm={() => deleteJournalPrompt(p.id)} />
+          </div>
+        </div>
+      ))}
+
+      {prompts.length === 0 && (
+        <div className="px-4 py-6 text-[13px] text-center" style={{ color: 'var(--muted)' }}>
+          No questions — the Mood sheet will just ask for a mood and a note.
+        </div>
+      )}
+
+      <div className="p-4 space-y-3">
+        <input
+          className="w-full border-b pb-2 text-[14.5px]"
+          style={{ borderColor: 'var(--line)', background: 'transparent', color: 'var(--text)' }}
+          placeholder="Add a question…"
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commitNew()
+            }
+          }}
+          onBlur={commitNew}
+        />
+        <div className="text-[11px]" style={{ color: 'var(--muted)' }}>
+          Hold the ✕ beside a question to remove it. Answers already written
+          stay with their day, and come back if you add the question again.
+        </div>
+        {missingDefaults && (
+          <button
+            className="text-[13px]"
+            style={{ color: 'var(--accent)' }}
+            onClick={restoreDefaultJournalPrompts}
+          >
+            Put the starting questions back
+          </button>
+        )}
+      </div>
+      <div className="h-8" />
+    </Screen>
+  )
+}
+
 function ImportantDates({ onBack }: { onBack: () => void }) {
   const { db, addImportantDate, updateImportantDate, archiveImportantDate, restoreImportantDate } =
     useStore()
@@ -434,6 +561,28 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
           the .mmbak import so existing backups keep loading unchanged; only
           the control is withdrawn. Restore this row the day a calculation
           actually consumes the flag. */}
+      {/* Three settings the app has always honoured but never offered a way
+          to change — money.ts reads both of the first two on every amount it
+          formats, and the habit graph reads the third. Unlike Start Screen
+          and Carry-over above, each of these does something the moment it is
+          flipped, which is the whole test for whether a row belongs here. */}
+      <Row
+        label="Decimals"
+        value={s.decimals === 2 ? '2 (1,234.00)' : '0 (1,234)'}
+        onClick={() => updateSettings({ decimals: s.decimals === 2 ? 0 : 2 })}
+      />
+      <Row
+        label="Symbol position"
+        value={s.symbolBefore ? `${s.currencySymbol}100` : `100${s.currencySymbol}`}
+        onClick={() => updateSettings({ symbolBefore: !s.symbolBefore })}
+      />
+      <Row
+        label="Habit graph range"
+        value={HABIT_RANGE_LABEL[s.habitGraphRange ?? 'week']}
+        onClick={() =>
+          updateSettings({ habitGraphRange: nextHabitRange(s.habitGraphRange ?? 'week') })
+        }
+      />
       <Row
         label={`${TYPE_LABEL.income}-${TYPE_LABEL.expense} Color Setting`}
         value={`Set. ${s.colorSet}`}
@@ -481,6 +630,15 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
         value={nextImportantLabel(db.importantDates)}
         onClick={() => setPage('dates')}
       />
+      <Row
+        label="Journal questions"
+        value={
+          db.journalPrompts.length === 0
+            ? 'None'
+            : `${db.journalPrompts.length} question${db.journalPrompts.length === 1 ? '' : 's'}`
+        }
+        onClick={() => setPage('prompts')}
+      />
       <Row label="Quick add" value={onOff(s.quickAdd)} onClick={() => flip('quickAdd')} />
 
       <SectionLabel>Vault</SectionLabel>
@@ -494,6 +652,7 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
       {page === 'budget' && <BudgetSetting month={month} onBack={() => setPage(null)} />}
       {page === 'repeat' && <RepeatManager onBack={() => setPage(null)} />}
       {page === 'dates' && <ImportantDates onBack={() => setPage(null)} />}
+      {page === 'prompts' && <JournalPromptsSetting onBack={() => setPage(null)} />}
 
       <Sheet open={sheet === 'currency'} onClose={() => setSheet(null)} title="Main currency">
         <div className="grid grid-cols-4 gap-2 p-4">

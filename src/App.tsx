@@ -29,7 +29,8 @@ import { WeekPicker } from './components/WeekPicker'
 import { Hidden } from './screens/Hidden'
 import { TAB_THEME, TITLE_TABS, Total, Trans, orderedTransTabs, type TransTab } from './screens/Trans'
 import { PlannerSheet } from './screens/Planner'
-import { Stats, STATS_PERIODS, type StatsPeriod } from './screens/Stats'
+import { SuppliersSheet } from './screens/Suppliers'
+import { Stats, STATS_PERIODS, type StatsPeriod, type StatsRange } from './screens/Stats'
 import { Accounts } from './screens/Accounts'
 import { Loans } from './screens/Loans'
 import { StockPanel } from './screens/Stock'
@@ -103,6 +104,13 @@ const TAB_LABEL: Record<Tab, string> = {
  */
 const APP_VERSION = `${__APP_VERSION__}.${__BUILD__}`
 
+/** "2026-08-24" → "24 Aug". Short enough for two of them plus a dash to sit
+ *  in a header button without pushing the title off the row. */
+function shortDayLabel(key: string): string {
+  const [, m, d] = key.split('-')
+  return `${Number(d)} ${MONTHS_SHORT[Number(m) - 1]}`
+}
+
 /** Square-ish icon button used across the app bars. */
 function IconButton({
   label,
@@ -138,6 +146,7 @@ function ExtraScreen({
   month,
   setMonth,
   statsPeriod,
+  statsRange,
   onPickPeriod,
   onClose,
   onEdit,
@@ -154,6 +163,7 @@ function ExtraScreen({
   month: string
   setMonth: (m: string) => void
   statsPeriod: StatsPeriod
+  statsRange: StatsRange
   onPickPeriod: () => void
   onClose: () => void
   onEdit: (tx: Transaction) => void
@@ -165,10 +175,19 @@ function ExtraScreen({
   onCloseChore: () => void
   onAddChore: () => void
 }) {
-  // Stats and Total are month-scoped; Loans and Stock are not.
-  const monthScoped = page === 'stats' || page === 'total'
+  // Stats and Total are month-scoped; Loans and Stock are not. Stats drops
+  // its month button for the two periods the month has no say in — 'All'
+  // spans the whole ledger and 'Custom' carries its own two dates — since a
+  // stepper that visibly does nothing reads as broken rather than inert.
+  const monthScoped =
+    page === 'total' ||
+    (page === 'stats' && statsPeriod !== 'All' && statsPeriod !== 'Custom')
   const monthLabelText = `${MONTHS_SHORT[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`
   const isKitee = page === 'kitee'
+  // Local rather than lifted to the shell: this only ever matters while
+  // Khushi itself is mounted, and ExtraScreen already unmounts entirely on
+  // its own Back — same reasoning as Loans' own editor state.
+  const [suppliersOpen, setSuppliersOpen] = useState(false)
 
   // Kitee is the one ExtraScreen page that still owns a look — the galaxy
   // photo and the pale-on-violet header it had as a Trans sub-tab, both
@@ -198,6 +217,13 @@ function ExtraScreen({
         <div className="relative flex items-center px-2 bar-row gap-1">
           <IconButton label="Back" d="M15 5l-7 7 7 7" onClick={onClose} />
           <span className="t-title flex-1 truncate">{title}</span>
+          {isKitee && (
+            <IconButton
+              label="Suppliers"
+              d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"
+              onClick={() => setSuppliersOpen(true)}
+            />
+          )}
           {monthScoped && (
             <button
               className="px-3 py-1.5 rounded-[var(--r-sm)] text-[14px] font-semibold press"
@@ -213,14 +239,21 @@ function ExtraScreen({
               style={{ background: 'var(--surface-2)', border: '1.5px solid var(--line)' }}
               onClick={onPickPeriod}
             >
-              {statsPeriod}
+              {/* The button says what it is actually showing, not just what
+                  mode it is in — "Custom" alone left the two dates you had
+                  chosen invisible from the screen they were filtering. */}
+              {statsPeriod === 'Custom'
+                ? `${shortDayLabel(statsRange.from)} – ${shortDayLabel(statsRange.to)}`
+                : statsPeriod}
             </button>
           )}
         </div>
       </header>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        {page === 'stats' && <Stats month={month} period={statsPeriod} onEdit={onEdit} />}
+        {page === 'stats' && (
+          <Stats month={month} period={statsPeriod} range={statsRange} onEdit={onEdit} />
+        )}
         {page === 'accounts' && <Accounts month={month} onEdit={onEdit} />}
         {page === 'loans' && <Loans />}
         {page === 'stock' && <StockPanel />}
@@ -243,6 +276,8 @@ function ExtraScreen({
           and memo editors, so its add button lives up here too rather than
           inside LastDone itself. */}
       {page === 'lastDone' && <Fab onClick={onAddChore} />}
+
+      {isKitee && <SuppliersSheet open={suppliersOpen} onClose={() => setSuppliersOpen(false)} />}
     </div>
   )
 }
@@ -418,6 +453,14 @@ function Shell() {
   const [day, setDay] = useState(todayKey())
   const [dayPicker, setDayPicker] = useState(false)
   const [statsPeriod, setStatsPeriod] = useState<StatsPeriod>('Monthly')
+  // The two ends of the 'Custom' period. Defaulted to the last 30 days
+  // rather than left blank so picking "Custom" shows a real answer straight
+  // away and the two date fields read as something to adjust rather than a
+  // form to fill in before anything happens.
+  const [statsRange, setStatsRange] = useState<StatsRange>(() => ({
+    from: addDays(todayKey(), -29),
+    to: todayKey(),
+  }))
   const [periodMenu, setPeriodMenu] = useState(false)
   const [picker, setPicker] = useState(false)
   const [search, setSearch] = useState<null | 'plain' | 'filters'>(null)
@@ -998,7 +1041,17 @@ function Shell() {
           everywhere except the vault, where it turns to glass over that
           screen's full-shell photo. */}
       <nav
-        className={`shrink-0 relative grid border-t z-20${tab === 'Authentication' ? ' vault-navbar' : ''}`}
+        // Above the Fab (z-30, ui.tsx), not below it. The Fab is meant to
+        // float just clear of this bar, but a device where the bar renders
+        // even a little taller than --nav-h assumes — a bigger system font
+        // scale wrapping a tab label, for one — let the Fab's circle reach
+        // down over Shafali/More and silently eat their taps, since a
+        // higher z-index painted it on top regardless of which one actually
+        // ended up lower on screen. The nav is a permanent, load-bearing
+        // control; it should never lose a tap to a screen-specific button
+        // floating nearby, so it wins the stacking order outright rather
+        // than relying on the geometry always landing exactly right.
+        className={`shrink-0 relative grid border-t z-40${tab === 'Authentication' ? ' vault-navbar' : ''}`}
         style={{
           // Derived from the tab list rather than hard-coded: this was still
           // grid-cols-5 after the bar dropped to three, so the icons sat in
@@ -1147,12 +1200,86 @@ function Shell() {
             }}
             onClick={() => {
               setStatsPeriod(p)
-              setPeriodMenu(false)
+              // Custom is the one period that needs saying *which* custom —
+              // it stays open on the two dates below rather than closing on
+              // whatever range happened to be left there last time.
+              if (p !== 'Custom') setPeriodMenu(false)
             }}
           >
-            {p}
+            {p === 'Custom' ? 'Custom range…' : p}
           </button>
         ))}
+
+        {statsPeriod === 'Custom' && (
+          <div className="p-4 space-y-4">
+            {/* The spans actually asked for, as one tap each. Typing two
+                dates for "the last 90 days" is the sort of arithmetic this
+                screen exists to remove. */}
+            <div className="flex flex-wrap gap-2">
+              {([
+                ['Last 7 days', 6],
+                ['Last 30 days', 29],
+                ['Last 90 days', 89],
+                ['Last year', 364],
+              ] as const).map(([label, back]) => {
+                const preset = { from: addDays(todayKey(), -back), to: todayKey() }
+                const on = statsRange.from === preset.from && statsRange.to === preset.to
+                return (
+                  <button
+                    key={label}
+                    className="px-3 py-1.5 rounded-full text-[12px]"
+                    style={{
+                      background: on ? 'var(--accent)' : 'var(--bg)',
+                      color: on ? '#fff' : 'var(--text)',
+                    }}
+                    onClick={() => setStatsRange(preset)}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <div className="text-[11px] mb-1" style={{ color: 'var(--muted)' }}>
+                  From
+                </div>
+                <input
+                  type="date"
+                  className="w-full border-b pb-2 text-[14px] num"
+                  style={{ borderColor: 'var(--line)', background: 'transparent', color: 'var(--text)' }}
+                  value={statsRange.from}
+                  onChange={(e) =>
+                    e.target.value && setStatsRange((r) => ({ ...r, from: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="flex-1">
+                <div className="text-[11px] mb-1" style={{ color: 'var(--muted)' }}>
+                  To
+                </div>
+                <input
+                  type="date"
+                  className="w-full border-b pb-2 text-[14px] num"
+                  style={{ borderColor: 'var(--line)', background: 'transparent', color: 'var(--text)' }}
+                  value={statsRange.to}
+                  onChange={(e) =>
+                    e.target.value && setStatsRange((r) => ({ ...r, to: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+
+            <button
+              className="w-full py-3 rounded-lg text-white text-[15px] font-semibold"
+              style={{ background: 'var(--accent)' }}
+              onClick={() => setPeriodMenu(false)}
+            >
+              Show these dates
+            </button>
+          </div>
+        )}
       </Sheet>
 
       <PlannerSheet open={plannerOpen} onClose={() => setPlannerOpen(false)} />
@@ -1248,6 +1375,7 @@ function Shell() {
           month={month}
           setMonth={setMonth}
           statsPeriod={statsPeriod}
+          statsRange={statsRange}
           onPickPeriod={() => setPeriodMenu(true)}
           onClose={() => setExtraPage(null)}
           onEdit={openEditor}

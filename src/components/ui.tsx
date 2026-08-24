@@ -979,7 +979,10 @@ export function Fab({ onClick, icon }: { onClick: () => void; icon?: ReactNode }
       className="fixed z-30 w-[64px] h-[64px] rounded-full text-white leading-none flex items-center justify-center press animate-fade"
       style={{
         right: 'calc(var(--sar) + 18px)',
-        bottom: 'calc(var(--sab) + var(--nav-h) + 18px)',
+        // Was +18px — raised for more headroom above the nav bar so its own
+        // shadow (below) doesn't wash into the bar's icons on a phone where
+        // the bar renders a touch taller than --nav-h assumes.
+        bottom: 'calc(var(--sab) + var(--nav-h) + 26px)',
         background:
           'linear-gradient(155deg, color-mix(in srgb, var(--accent) 82%, #fff) 0%, var(--accent) 52%, color-mix(in srgb, var(--accent) 82%, #000) 100%)',
         boxShadow:

@@ -15,6 +15,7 @@ import type {
   DocItem,
   Habit,
   ImportantDate,
+  JournalPrompt,
   MoodDef,
   Loan,
   Memo,
@@ -22,12 +23,15 @@ import type {
   PlannerTask,
   RepeatRule,
   Settings,
+  SleepQuality,
   PurchaseItem,
   StockItem,
+  Supplier,
   Transaction,
   VaultCategory,
   VaultSecurity,
 } from './types'
+import { DEFAULT_JOURNAL_PROMPTS } from './types'
 import * as store from './lib/db'
 import { seedDB, uid } from './lib/seed'
 import { normalizeDB } from './lib/normalize'
@@ -66,7 +70,10 @@ interface Ctx {
   addMemo: (m: Omit<Memo, 'id'>) => void
   updateMemo: (m: Memo) => void
   deleteMemo: (id: string) => void
-  addHabit: (h: Omit<Habit, 'id' | 'order'>) => void
+  /** Accepts a pre-made id so a caller that needs it right away — scheduling
+   *  a new habit's reminders, for one — doesn't have to guess it back out of
+   *  the freshly-saved list. */
+  addHabit: (h: Omit<Habit, 'id' | 'order'> & { id?: string }) => void
   updateHabit: (h: Habit) => void
   deleteHabit: (id: string) => void
   reorderHabits: (ids: string[]) => void
@@ -90,6 +97,11 @@ interface Ctx {
    */
   saveSleep: (date: string, start: string, end: string) => void
   removeSleep: (id: string) => void
+  /** Rates a recorded night, or clears the rating with `undefined`. Only
+   *  meaningful once the night has a `start`/`end`. */
+  setSleepQuality: (id: string, quality: SleepQuality | undefined) => void
+  /** Writes down what was remembered on waking. */
+  setSleepDream: (id: string, dream: string) => void
 
   addImportantDate: (d: Omit<ImportantDate, 'id'>) => void
   updateImportantDate: (d: ImportantDate) => void
@@ -131,6 +143,22 @@ interface Ctx {
   updatePurchaseItem: (p: PurchaseItem) => void
   deletePurchaseItem: (id: string) => void
   reorderStockItems: (ids: string[]) => void
+  addSupplier: (s: Omit<Supplier, 'id' | 'order'>) => void
+  updateSupplier: (s: Supplier) => void
+  deleteSupplier: (id: string) => void
+  reorderSuppliers: (ids: string[]) => void
+
+  /** Records one reflection answer on a day, creating the day's entry if the
+   *  mood itself hasn't been set yet. An empty string clears the answer. */
+  setMoodAnswer: (date: string, promptId: string, text: string) => void
+  addJournalPrompt: (question: string) => void
+  updateJournalPrompt: (p: JournalPrompt) => void
+  /** Drops the question. Answers already given keep sitting in their
+   *  MoodLogs — see the note on MoodLog.answers. */
+  deleteJournalPrompt: (id: string) => void
+  reorderJournalPrompts: (ids: string[]) => void
+  /** Puts the three starting questions back, keeping any the owner added. */
+  restoreDefaultJournalPrompts: () => void
 
   addPlannerTask: (t: Omit<PlannerTask, 'id' | 'order'>) => void
   updatePlannerTask: (t: PlannerTask) => void
@@ -511,7 +539,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addHabit(h) {
         mut((d) => ({
           ...d,
-          habits: [...d.habits, { ...h, id: uid(), order: d.habits.length }],
+          habits: [...d.habits, { ...h, id: h.id ?? uid(), order: d.habits.length }],
         }))
       },
       updateHabit(h) {
@@ -601,6 +629,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       removeSleep(id) {
         mut((d) => ({ ...d, sleepLogs: d.sleepLogs.filter((s) => s.id !== id) }))
+      },
+      setSleepQuality(id, quality) {
+        mut((d) => ({
+          ...d,
+          sleepLogs: d.sleepLogs.map((s) => (s.id === id ? { ...s, quality } : s)),
+        }))
+      },
+      setSleepDream(id, dream) {
+        mut((d) => ({
+          ...d,
+          sleepLogs: d.sleepLogs.map((s) => (s.id === id ? { ...s, dream: dream || undefined } : s)),
+        }))
       },
 
       addImportantDate(date) {
@@ -843,6 +883,100 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }))
       },
 
+      addSupplier(s) {
+        mut((d) => ({
+          ...d,
+          suppliers: [...d.suppliers, { ...s, id: uid(), order: d.suppliers.length }],
+        }))
+      },
+      updateSupplier(s) {
+        mut((d) => ({ ...d, suppliers: d.suppliers.map((x) => (x.id === s.id ? s : x)) }))
+      },
+      deleteSupplier(id) {
+        mut((d) => ({ ...d, suppliers: d.suppliers.filter((x) => x.id !== id) }))
+      },
+      reorderSuppliers(ids) {
+        mut((d) => ({
+          ...d,
+          suppliers: d.suppliers.map((s) => ({
+            ...s,
+            order: ids.indexOf(s.id) === -1 ? s.order : ids.indexOf(s.id),
+          })),
+        }))
+      },
+
+      setMoodAnswer(date, promptId, text) {
+        mut((d) => {
+          const existing = d.moodLogs.find((m) => m.date === date)
+          const write = (answers?: Record<string, string>) => {
+            const next = { ...(answers ?? {}) }
+            // Deleted rather than stored as '' so a cleared box leaves no
+            // trace — an empty-string answer would still count as "answered"
+            // everywhere that tests for one.
+            if (text.trim()) next[promptId] = text
+            else delete next[promptId]
+            return Object.keys(next).length ? next : undefined
+          }
+          if (existing) {
+            return {
+              ...d,
+              moodLogs: d.moodLogs.map((m) =>
+                m === existing ? { ...m, answers: write(m.answers) } : m,
+              ),
+            }
+          }
+          // Answering before picking a mood is allowed — the questions are
+          // the point of the sheet for some days, and refusing to save until
+          // a chip is tapped would lose what was typed. `level: ''` is a day
+          // with writing but no mood; moodDef falls back for an unknown id.
+          return {
+            ...d,
+            moodLogs: [...d.moodLogs, { id: uid(), date, level: '', answers: write(undefined) }],
+          }
+        })
+      },
+      addJournalPrompt(question) {
+        mut((d) => ({
+          ...d,
+          journalPrompts: [
+            ...d.journalPrompts,
+            { id: uid(), question, order: d.journalPrompts.length },
+          ],
+        }))
+      },
+      updateJournalPrompt(p) {
+        mut((d) => ({
+          ...d,
+          journalPrompts: d.journalPrompts.map((x) => (x.id === p.id ? p : x)),
+        }))
+      },
+      deleteJournalPrompt(id) {
+        mut((d) => ({ ...d, journalPrompts: d.journalPrompts.filter((x) => x.id !== id) }))
+      },
+      reorderJournalPrompts(ids) {
+        mut((d) => ({
+          ...d,
+          journalPrompts: d.journalPrompts.map((p) => ({
+            ...p,
+            order: ids.indexOf(p.id) === -1 ? p.order : ids.indexOf(p.id),
+          })),
+        }))
+      },
+      restoreDefaultJournalPrompts() {
+        mut((d) => {
+          const have = new Set(d.journalPrompts.map((p) => p.id))
+          const missing = DEFAULT_JOURNAL_PROMPTS.filter((p) => !have.has(p.id))
+          if (!missing.length) return d
+          return {
+            ...d,
+            journalPrompts: [
+              ...d.journalPrompts,
+              ...missing.map((p, i) => ({ ...p, order: d.journalPrompts.length + i })),
+            ],
+          }
+        })
+      },
+
       addPlannerTask(t) {
         mut((d) => {
           const inBlock = t.block
@@ -1004,6 +1138,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             purchaseItems: [
               ...d.purchaseItems,
               ...(incoming.purchaseItems ?? []).filter((p) => !has(d.purchaseItems, p.id)),
+            ],
+            // Same omission as the Last Done / Sleep one noted above, found
+            // again three collections later: a collection left off this list
+            // isn't merged at all, so a backup's planner, suppliers and
+            // journal questions were written to the file and then quietly
+            // ignored on the way back in. Anything added to DB from here on
+            // needs a line here too.
+            suppliers: [
+              ...d.suppliers,
+              ...(incoming.suppliers ?? []).filter((s) => !has(d.suppliers, s.id)),
+            ],
+            journalPrompts: [
+              ...d.journalPrompts,
+              ...(incoming.journalPrompts ?? []).filter((p) => !has(d.journalPrompts, p.id)),
+            ],
+            plannerTasks: [
+              ...d.plannerTasks,
+              ...(incoming.plannerTasks ?? []).filter((t) => !has(d.plannerTasks, t.id)),
             ],
           }
         })

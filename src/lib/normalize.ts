@@ -1,5 +1,5 @@
 import type { Category, DB, Transaction } from '../types'
-import { DEFAULT_MOODS, dealLevel, moodTag } from '../types'
+import { DEFAULT_JOURNAL_PROMPTS, DEFAULT_MOODS, SLEEP_QUALITY_LEVELS, dealLevel, moodTag } from '../types'
 import { seedDB } from './seed'
 
 /**
@@ -125,12 +125,32 @@ export function normalizeDB(input: Partial<DB> | null | undefined): DB {
     habitLogs: base.habitLogs ?? [],
     chores: base.chores ?? [],
     choreLogs: base.choreLogs ?? [],
-    sleepLogs: base.sleepLogs ?? [],
+    // `quality` is a named level ('rough'…'great'), but it briefly shipped
+    // as a 1–5 number and a restored backup or a hand-edited file can carry
+    // anything. An unrecognised value is dropped rather than guessed at: a
+    // number would index the label table to `undefined` and the moon's phase
+    // lookup to -1, drawing a broken crescent for a night nobody can explain.
+    sleepLogs: (base.sleepLogs ?? []).map((s) =>
+      s.quality === undefined || SLEEP_QUALITY_LEVELS.includes(s.quality)
+        ? s
+        : { ...s, quality: undefined },
+    ),
     importantDates: base.importantDates ?? [],
     // Mood used to reuse the deal rating's five points before it had its own
     // vocabulary; moodTag carries anything saved under those old values
     // forward to its nearest new tag.
-    moodLogs: (base.moodLogs ?? []).map((m) => ({ ...m, level: moodTag(m.level) })),
+    // An empty level is deliberate, not missing: a day can carry journal
+    // answers with no mood picked (see setMoodAnswer in store.tsx), and
+    // those are stored as ''. moodTag treats any falsy value as legacy data
+    // and returns 'okay', which would have quietly turned every
+    // answers-only day into an "Okay" mood the owner never chose — on the
+    // next app load, invisibly, and then counted it in the weekly mode and
+    // the carry-forward tile. Only a genuinely absent level gets the
+    // legacy default now.
+    moodLogs: (base.moodLogs ?? []).map((m) => ({
+      ...m,
+      level: m.level === '' ? '' : moodTag(m.level),
+    })),
     // A database from before moods were editable has no list of its own —
     // it seeds from the seed nine, the same values `moodTag` above already
     // normalises old entries onto, so every log still points at something
@@ -151,6 +171,13 @@ export function normalizeDB(input: Partial<DB> | null | undefined): DB {
     loans: base.loans ?? [],
     stockItems: base.stockItems ?? [],
     purchaseItems: base.purchaseItems ?? [],
+    suppliers: base.suppliers ?? [],
+    // Seeded rather than left empty for a database saved before prompts
+    // existed — an upgrade should find the three questions already there,
+    // the same as a fresh install, not an empty Journal with no way to know
+    // anything is meant to be in it. An owner who deletes them all gets an
+    // empty array, which is preserved (?? only fills in a missing key).
+    journalPrompts: base.journalPrompts ?? DEFAULT_JOURNAL_PROMPTS,
     plannerTasks: base.plannerTasks ?? [],
     transactions: cleaned.transactions.map((t) => {
       let next = t

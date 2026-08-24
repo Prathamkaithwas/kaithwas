@@ -3,7 +3,7 @@ import type { Transaction } from '../types'
 import { TYPE_LABEL } from '../types'
 import { useStore } from '../store'
 import { byCategory, totalsOf, txsInMonth, txsInRange, type CategorySlice } from '../lib/calc'
-import { addMonths, monthRange } from '../lib/date'
+import { addMonths, monthRange, parseISO } from '../lib/date'
 import { Empty, Money, Screen } from '../components/ui'
 import { TxRow } from '../components/TxRow'
 
@@ -12,16 +12,43 @@ import { TxRow } from '../components/TxRow'
  * Every other period answers "how much this week/month/year", and none of
  * them can add up a subcategory over the whole life of the ledger — which is
  * the number actually being asked for.
+ *
+ * `Custom` is the escape hatch from the fixed four: a festival week that
+ * straddles two months, one supplier's billing cycle, "since I reopened in
+ * March" — real questions a shop asks that no calendar-aligned period can
+ * answer. Its two dates live in the shell alongside the period itself (see
+ * `statsRange` in App.tsx) so the header can label the button with them.
  */
-export const STATS_PERIODS = ['Weekly', 'Monthly', 'Annually', 'All'] as const
+export const STATS_PERIODS = ['Weekly', 'Monthly', 'Annually', 'All', 'Custom'] as const
 export type StatsPeriod = (typeof STATS_PERIODS)[number]
+
+/** The two ends of a `Custom` period, each YYYY-MM-DD and inclusive. */
+export interface StatsRange {
+  from: string
+  to: string
+}
 
 function periodTxs(
   db: ReturnType<typeof useStore>['db'],
   month: string,
   period: StatsPeriod,
+  range?: StatsRange,
 ): Transaction[] {
   if (period === 'All') return db.transactions
+  if (period === 'Custom') {
+    // Both ends inclusive — a range typed as 1st–31st should contain
+    // everything filed on the 31st, not stop at midnight as it began.
+    // Backwards ranges are read either way round rather than silently
+    // returning nothing, since a date picker makes it easy to set the far
+    // end first.
+    if (!range) return db.transactions
+    const a = parseISO(range.from + 'T00:00')
+    const b = parseISO(range.to + 'T00:00')
+    const [lo, hi] = a <= b ? [a, b] : [b, a]
+    const end = new Date(hi)
+    end.setHours(23, 59, 59, 999)
+    return txsInRange(db, lo, end)
+  }
   if (period === 'Monthly') return txsInMonth(db, month)
   if (period === 'Annually') {
     const year = month.slice(0, 4)
@@ -47,10 +74,12 @@ function periodTxs(
 export function Stats({
   month,
   period,
+  range,
   onEdit,
 }: {
   month: string
   period: StatsPeriod
+  range?: StatsRange
   onEdit: (tx: Transaction) => void
 }) {
   const { db } = useStore()
@@ -61,7 +90,7 @@ export function Stats({
   const [sub, setSub] = useState<string | null>(null)
   const [find, setFind] = useState('')
 
-  const txs = useMemo(() => periodTxs(db, month, period), [db, month, period])
+  const txs = useMemo(() => periodTxs(db, month, period, range), [db, month, period, range])
   const t = totalsOf(txs)
   // Stock is not a transaction view, so the pie only ever reads income/expense.
   const slices = byCategory(db, txs, type, true)

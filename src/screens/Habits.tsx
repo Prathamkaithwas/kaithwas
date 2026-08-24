@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Habit, MoodDef } from '../types'
 import { MOOD_COLOR_CHOICES } from '../types'
 import { useStore } from '../store'
-import { CHART_COLORS } from '../lib/seed'
+import { CHART_COLORS, uid } from '../lib/seed'
 import { activityWeeks, dateToKey, dayLabel, GRAPH_RANGE_WEEKS, MONTHS_SHORT, parseISO, todayKey, weeksToShow, WEEKDAYS } from '../lib/date'
 import { Confirm, EditLockButton, Sheet } from '../components/ui'
 import { HoldConfirm } from '../components/HoldConfirm'
@@ -13,6 +13,7 @@ import { HABIT_ICON_IDS, HABIT_ICON_LABEL, HabitIcon } from '../lib/habitIcons'
 import { useCountUp } from '../lib/useCountUp'
 import { useToast } from '../components/Toast'
 import { fileToPhoto } from '../lib/photo'
+import { cancelHabitReminders, ensureNotificationPermission, syncHabitReminders } from '../lib/notifications'
 
 /** How many days each tile's dot row shows. */
 const RECENT_DAYS = 14
@@ -115,9 +116,15 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
   // moment midnight passed, even though nothing about how you're feeling
   // actually reset. An exact match for today still wins once you log one.
   const todaysMood = useMemo(() => {
-    const exact = db.moodLogs.find((m) => m.date === today)
+    // Only days that actually carry a mood. A day can now exist with nothing
+    // but a journal answer on it (see setMoodAnswer in store.tsx), and those
+    // have `level: ''` — left unfiltered, writing one this morning would
+    // blank this tile and break the carry-forward below, which is the whole
+    // reason the tile shows the last mood rather than resetting at midnight.
+    const rated = db.moodLogs.filter((m) => m.level)
+    const exact = rated.find((m) => m.date === today)
     if (exact) return exact
-    return [...db.moodLogs].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+    return [...rated].sort((a, b) => (a.date < b.date ? 1 : -1))[0]
   }, [db.moodLogs, today])
 
   const scroller = useRef<HTMLDivElement>(null)
@@ -340,8 +347,13 @@ function moodWeekTypical(logs: { date: string; level: string }[], moods: MoodDef
  * square opens it for editing rather than only ever showing today.
  */
 function MoodDetail({ onClose }: { onClose: () => void }) {
-  const { db, setMood, removeMood } = useStore()
+  const { db, setMood, removeMood, setMoodAnswer } = useStore()
   const [managing, setManaging] = useState(false)
+  const prompts = useMemo(
+    () => [...db.journalPrompts].sort((a, b) => a.order - b.order),
+    [db.journalPrompts],
+  )
+  const [writtenOnly, setWrittenOnly] = useState(true)
   // Back to the first day actually logged, not a fixed year of mostly
   // empty columns — see Sleep.tsx's calendar for the same reasoning.
   const grid = useMemo(() => {
@@ -388,6 +400,14 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
   }, [editing])
 
   const weekTypical = useMemo(() => moodWeekTypical(db.moodLogs, db.moods), [db.moodLogs, db.moods])
+
+  const ratedCount = useMemo(() => db.moodLogs.filter((m) => m.level).length, [db.moodLogs])
+
+  const journalEntries = useMemo(() => {
+    const sorted = [...db.moodLogs].sort((a, b) => (a.date < b.date ? 1 : -1))
+    if (!writtenOnly) return sorted
+    return sorted.filter((l) => l.note || (l.answers && Object.keys(l.answers).length > 0))
+  }, [db.moodLogs, writtenOnly])
 
   const stat = (value: string, label: string) => (
     <div className="ld-stat">
@@ -458,8 +478,42 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
           />
         )}
 
+        {/* The day's reflection. Unlike the note above these show whether or
+            not a mood has been picked — some days the questions are the
+            whole reason the sheet is open, and refusing to take an answer
+            until a chip is tapped would throw away what was typed. */}
+        {prompts.length > 0 && unlocked && (
+          <div className="mood-prompts">
+            {prompts.map((p) => (
+              <PromptField
+                key={p.id}
+                question={p.question}
+                value={current?.answers?.[p.id] ?? ''}
+                onCommit={(text) => setMoodAnswer(editing, p.id, text)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Locked days still show what was written — read-only, so revisiting
+            a week later is a scroll rather than an unlock. */}
+        {prompts.length > 0 && !unlocked && current?.answers && (
+          <div className="mood-prompts">
+            {prompts
+              .filter((p) => current.answers?.[p.id])
+              .map((p) => (
+                <div key={p.id} className="mood-prompt" data-read>
+                  <div className="mood-prompt-q">{p.question}</div>
+                  <div className="mood-prompt-a">{current.answers?.[p.id]}</div>
+                </div>
+              ))}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
-          {stat(String(db.moodLogs.length), db.moodLogs.length === 1 ? 'day logged' : 'days logged')}
+          {/* Days with a mood on them, not rows in the table — an
+              answers-only day is a journal entry, not a mood logged. */}
+          {stat(String(ratedCount), ratedCount === 1 ? 'day logged' : 'days logged')}
           {stat(weekTypical?.label ?? '—', 'most this week')}
         </div>
 
@@ -470,34 +524,68 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
             its square does. */}
         {db.moodLogs.length > 0 && (
           <div>
-            <div className="text-[11px] uppercase tracking-wide mb-1.5" style={{ color: 'var(--muted)' }}>
-              Journal
+            <div className="mood-journal-head-row">
+              <span className="text-[11px] uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
+                Journal
+              </span>
+              {/* A day with nothing but a mood chip on it is a data point,
+                  not an entry worth re-reading. This filter is what makes
+                  the list usable once there are months of both. */}
+              <button
+                className="mood-journal-filter"
+                data-on={writtenOnly || undefined}
+                onClick={() => setWrittenOnly((w) => !w)}
+              >
+                {writtenOnly ? 'Written only' : 'All days'}
+              </button>
             </div>
             <div className="mood-journal">
-              {[...db.moodLogs]
-                .sort((a, b) => (a.date < b.date ? 1 : -1))
-                .map((log) => {
-                  const def = moodDef(db.moods, log.level)
-                  return (
-                    <button
-                      key={log.date}
-                      className="mood-journal-row"
-                      data-on={log.date === editing || undefined}
-                      onClick={() => setEditing(log.date)}
-                    >
-                      <div className="mood-journal-head">
-                        <span className="mood-journal-date">
-                          {log.date === today ? 'Today' : dayLabel(log.date)}
-                        </span>
-                        <span className="mood-journal-mood">
-                          <span className="mood-journal-dot" style={{ background: def.color }} aria-hidden />
+              {journalEntries.length === 0 && (
+                <div className="mood-journal-empty">
+                  Nothing written yet — answer a question above and the day shows up here.
+                </div>
+              )}
+              {journalEntries.map((log) => {
+                const def = moodDef(db.moods, log.level)
+                const written = prompts
+                  .filter((p) => log.answers?.[p.id])
+                  .map((p) => [p.question, log.answers![p.id]] as const)
+                return (
+                  <button
+                    key={log.date}
+                    className="mood-journal-row"
+                    data-on={log.date === editing || undefined}
+                    onClick={() => setEditing(log.date)}
+                  >
+                    {/* The mood's own colour, run down the edge of its
+                        entry — a page of text needs something to tell one
+                        day from the next at a glance, and the dot alone was
+                        doing that job from inside the header row. */}
+                    <span
+                      className="mood-journal-edge"
+                      style={{ background: log.level ? def.color : 'var(--line-strong)' }}
+                      aria-hidden
+                    />
+                    <div className="mood-journal-head">
+                      <span className="mood-journal-date">
+                        {log.date === today ? 'Today' : dayLabel(log.date)}
+                      </span>
+                      {log.level && (
+                        <span className="mood-journal-mood" style={{ color: def.color }}>
                           {def.label || '—'}
                         </span>
+                      )}
+                    </div>
+                    {log.note && <div className="mood-journal-note">{log.note}</div>}
+                    {written.map(([q, a]) => (
+                      <div key={q} className="mood-journal-qa">
+                        <div className="mood-journal-q">{q}</div>
+                        <div className="mood-journal-a">{a}</div>
                       </div>
-                      {log.note && <div className="mood-journal-note">{log.note}</div>}
-                    </button>
-                  )
-                })}
+                    ))}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -521,11 +609,15 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
                 <div key={week[0]} className="ld-week">
                   {week.map((d) => {
                     const log = byDate.get(d)
-                    const def = log ? moodDef(db.moods, log.level) : undefined
+                    // A day with only a journal answer on it has no mood to
+                    // colour a square with — filling it in the fallback grey
+                    // would read as "logged a grey mood", which is not a
+                    // thing. It still opens on tap like any other day.
+                    const def = log?.level ? moodDef(db.moods, log.level) : undefined
                     return (
                       <i
                         key={d}
-                        data-on={!!log || undefined}
+                        data-on={!!def || undefined}
                         data-today={d === today || undefined}
                         data-future={d > today || undefined}
                         style={def ? { background: def.color } : undefined}
@@ -562,6 +654,47 @@ function MoodDetail({ onClose }: { onClose: () => void }) {
 
       {managing && <MoodManager onClose={() => setManaging(false)} />}
     </Sheet>
+  )
+}
+
+/**
+ * One reflection question and its answer.
+ *
+ * Its own component so the draft state is per-question and keyed by the
+ * field's position in the list — one shared `useState` in the parent would
+ * need an object keyed by prompt id and a effect to reseed it on every day
+ * switch. Committing on blur rather than per keystroke keeps a sentence
+ * being typed from writing to storage thirty times.
+ */
+function PromptField({
+  question,
+  value,
+  onCommit,
+}: {
+  question: string
+  value: string
+  onCommit: (text: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  // Reseeds when the day changes underneath it — `value` is the saved answer
+  // for whichever date is open, so switching days has to replace the draft
+  // rather than carry one day's half-typed answer onto another.
+  useEffect(() => setDraft(value), [value])
+
+  return (
+    <label className="mood-prompt">
+      <span className="mood-prompt-q">{question}</span>
+      <textarea
+        className="mood-prompt-input"
+        rows={2}
+        placeholder="…"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== value) onCommit(draft)
+        }}
+      />
+    </label>
   )
 }
 
@@ -1098,6 +1231,13 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
   // been touched by hand (see the input below).
   const [meditation, setMeditation] = useState(habit?.meditation ?? /meditat/i.test(habit?.name ?? ''))
   const [meditationTouched, setMeditationTouched] = useState(!!habit)
+  const [reminders, setReminders] = useState<string[]>(habit?.reminders ?? [])
+  const [newReminderTime, setNewReminderTime] = useState('09:00')
+  const toast = useToast()
+  // A brand-new habit needs its id decided up front, not handed back by
+  // addHabit — its reminders have to be scheduled against the same id the
+  // habit is about to be saved under, in this same save() call.
+  const habitId = useRef(habit?.id ?? uid()).current
 
   const save = () => {
     if (!name.trim()) return
@@ -1112,9 +1252,11 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
       unit: metered ? unit.trim() || 'min' : undefined,
       target: metered ? targetNum : undefined,
       meditation,
+      reminders: reminders.length ? reminders : undefined,
     }
     if (habit) updateHabit({ ...habit, ...payload })
-    else addHabit(payload)
+    else addHabit({ ...payload, id: habitId })
+    void syncHabitReminders({ id: habitId, name: payload.name, subtitle: payload.subtitle, reminders: payload.reminders })
     onClose()
   }
 
@@ -1232,6 +1374,56 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
           >
             {meditation ? 'On for this habit' : 'Off for this habit'}
           </button>
+        </div>
+
+        <div>
+          <div className="text-[12px] mb-2" style={{ color: 'var(--muted)' }}>
+            Reminders — a nudge at each time below, every day. Good for
+            something like medicine that needs a few separate taps rather
+            than one at the end of the day.
+          </div>
+          {reminders.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {reminders.map((t, i) => (
+                <span
+                  key={t + i}
+                  className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full text-[13px] num"
+                  style={{ background: 'var(--bg)', color: 'var(--text)' }}
+                >
+                  {t}
+                  <button
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-[13px] leading-none"
+                    style={{ color: 'var(--muted)' }}
+                    aria-label={`Remove ${t} reminder`}
+                    onClick={() => setReminders((r) => r.filter((_, j) => j !== i))}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="time"
+              className="border-b pb-2 text-[14px] num"
+              style={{ borderColor: 'var(--line)', background: 'transparent', color: 'var(--text)' }}
+              value={newReminderTime}
+              onChange={(e) => setNewReminderTime(e.target.value)}
+            />
+            <button
+              className="px-3 py-1.5 rounded-full text-[12px] font-semibold shrink-0"
+              style={{ background: 'var(--bg)', color: 'var(--accent)' }}
+              onClick={async () => {
+                if (!newReminderTime || reminders.includes(newReminderTime)) return
+                setReminders((r) => [...r, newReminderTime].sort())
+                const granted = await ensureNotificationPermission()
+                if (!granted) toast.error('Notifications are off for Kaithwas — turn them on to actually get this reminder')
+              }}
+            >
+              + Add reminder
+            </button>
+          </div>
         </div>
 
         <div>
@@ -1364,7 +1556,14 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
               <span className="text-[11px]" style={{ color: 'var(--muted)' }}>
                 hold to delete — history goes too
               </span>
-              <HoldConfirm label="Delete habit" onConfirm={() => { deleteHabit(habit.id); onClose() }} />
+              <HoldConfirm
+                label="Delete habit"
+                onConfirm={() => {
+                  deleteHabit(habit.id)
+                  void cancelHabitReminders(habit.id)
+                  onClose()
+                }}
+              />
             </>
           )}
           <span className="flex-1" />
