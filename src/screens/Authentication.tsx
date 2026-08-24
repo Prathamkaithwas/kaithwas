@@ -24,26 +24,10 @@ import { renderPdfPage } from '../lib/pdf'
 import { sharePhotos } from '../lib/share'
 import { speakCharacters, type SpeechHandle } from '../lib/speak'
 import { hapticError, hapticLight, hapticMedium } from '../lib/haptics'
-import { Heart, Star, Sun, Moon, Leaf, Anchor, Camera, Music2, Umbrella, type LucideIcon } from 'lucide-react'
 
-import { CANARY, LOCK_ICON_IDS, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
+import { CANARY, DEFAULT_LOCK_SEQUENCE, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
+import { VaultIconPad, VaultPinCells } from '../components/VaultIconPad'
 import { usePersistedFold } from '../lib/usePersistedFold'
-
-/** Which glyph each id in LOCK_ICON_IDS (vaultConst.ts) actually draws. Kept
- *  here rather than in that shared module since it's the one thing that
- *  needs lucide-react, and fakeData.ts — the module's other consumer —
- *  never renders anything. */
-const LOCK_ICON_MAP: Record<LockIconId, LucideIcon> = {
-  heart: Heart,
-  star: Star,
-  sun: Sun,
-  moon: Moon,
-  leaf: Leaf,
-  anchor: Anchor,
-  camera: Camera,
-  music: Music2,
-  umbrella: Umbrella,
-}
 
 type InnerTab = 'Vault' | 'Passwords' | 'Documents'
 const INNER_TABS: InnerTab[] = ['Vault', 'Passwords', 'Documents']
@@ -668,33 +652,24 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
   const [busy, setBusy] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const keysRef = useRef<HTMLDivElement>(null)
+  const provisioning = useRef(false)
 
-  // First-ever visit: no lock exists yet, so this same screen doubles as
-  // setup — pick four icons, in order, then tap the same four again to
-  // confirm, rather than silently provisioning a lock nobody actually
-  // chose. `firstSequence` holds what was tapped on the first pass while
-  // the second one is entered; it is never written anywhere and means
-  // nothing once setup finishes.
-  //
-  // There is deliberately still no "forgot it" recovery — same as before,
-  // just with a real consequence now: forgetting a sequence only you chose
-  // locks the vault for good, where forgetting the old fixed 6666 never
-  // could.
-  const setupNeeded = !db.vaultSecurity
-  const [firstSequence, setFirstSequence] = useState<LockIconId[] | null>(null)
-  const confirming = setupNeeded && firstSequence !== null
-
-  const provision = async (chosen: LockIconId[]) => {
-    setBusy(true)
-    const salt = randomSaltB64()
-    const key = await deriveVaultKey(sequenceToPassphrase(chosen), salt)
-    const check = await encryptText(key, CANARY)
-    setVaultSecurity({ salt, check })
-    // Same as unlocking right after — no reason to make the owner tap the
-    // sequence they just chose a third time.
-    hapticMedium()
-    onUnlock(key)
-  }
+  // First-ever visit: silently set up the default-sequence lock, no setup
+  // screen — same as the vault's very first version, which did this with
+  // the fixed digit PIN 6666. DEFAULT_LOCK_SEQUENCE (vaultConst.ts) is a
+  // known default on purpose, changeable any time from More → Settings →
+  // Vault lock (see ChangeVaultLock in screens/More.tsx), not a secret
+  // meant to survive being read out of the source.
+  useEffect(() => {
+    if (db.vaultSecurity || provisioning.current) return
+    provisioning.current = true
+    ;(async () => {
+      const salt = randomSaltB64()
+      const key = await deriveVaultKey(sequenceToPassphrase(DEFAULT_LOCK_SEQUENCE), salt)
+      const check = await encryptText(key, CANARY)
+      setVaultSecurity({ salt, check })
+    })()
+  }, [db.vaultSecurity, setVaultSecurity])
 
   /**
    * The one place in this app that spends a real motion budget.
@@ -753,30 +728,10 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
 
   // Fires once the fourth icon lands. Keyed on the sequence itself rather
   // than on a counter, so clearing it after a failure (setSequence([])
-  // below) is what re-arms this for the next attempt. Branches three ways:
-  // a normal unlock, the first of the two setup passes (remember it, ask
-  // again), or the second (provision if it matches what was just tapped,
-  // otherwise start setup over rather than silently keeping only one of
-  // the two).
+  // below) is what re-arms this for the next attempt.
   useEffect(() => {
     if (sequence.length !== SEQUENCE_LEN) return
-    if (!setupNeeded) {
-      void tryUnlock(sequence)
-      return
-    }
-    if (!confirming) {
-      setFirstSequence(sequence)
-      setSequence([])
-      return
-    }
-    if (sequence.join() === firstSequence?.join()) {
-      void provision(sequence)
-    } else {
-      hapticError()
-      setError("Didn't match — try again")
-      setFirstSequence(null)
-      setSequence([])
-    }
+    void tryUnlock(sequence)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sequence])
 
@@ -798,31 +753,9 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
         <div ref={heroRef} className="vault-hero" data-error={error ? true : undefined}>
           <div className="vault-hero-label">Shafali</div>
 
-          {/* Blank cells, not the icons themselves — the whole point of
-              picking icons instead of typing a PIN into a field in full
-              view is lost if the readout then displays exactly which four
-              were tapped for anyone glancing at the card instead of the
-              grid. Same "count, not content" property the digit PIN's
-              cells always had. */}
-          <div className="vault-pin">
-            {Array.from({ length: SEQUENCE_LEN }, (_, i) => (
-              <span key={i} className="vault-pin-cell" data-on={i < sequence.length || undefined} />
-            ))}
-          </div>
+          <VaultPinCells length={SEQUENCE_LEN} filled={sequence.length} />
 
-          <div className="vault-hero-sub">
-            {busy
-              ? confirming
-                ? 'Setting up…'
-                : 'Unlocking…'
-              : error
-                ? error
-                : setupNeeded
-                  ? confirming
-                    ? 'Tap the same four again to confirm'
-                    : 'Pick 4 icons, in order'
-                  : 'Locked'}
-          </div>
+          <div className="vault-hero-sub">{busy ? 'Unlocking…' : error || 'Locked'}</div>
 
           {/* Dotted arcs, drawn rather than an image — three concentric
               sweeps, the innermost brightening as the sequence fills so the
@@ -853,29 +786,8 @@ function VaultLock({ onUnlock }: { onUnlock: (key: CryptoKey) => void }) {
           </svg>
         </div>
 
-        <div ref={keysRef} className="vault-keys">
-          {LOCK_ICON_IDS.map((id) => {
-            const Icon = LOCK_ICON_MAP[id]
-            return (
-              <button
-                key={id}
-                className="vault-key"
-                aria-label={id}
-                disabled={busy}
-                onClick={() => onPick(id)}
-              >
-                <Icon size={22} strokeWidth={2} />
-              </button>
-            )
-          })}
-          {/* Blank either side of backspace, not a disabled key — rendered
-              as a button it still picked up the global disabled styling and
-              sat there looking like a control you were being refused. */}
-          <span aria-hidden />
-          <button className="vault-key" disabled={busy} onClick={onBackspace} aria-label="Backspace">
-            ⌫
-          </button>
-          <span aria-hidden />
+        <div ref={keysRef}>
+          <VaultIconPad onPick={onPick} onBackspace={onBackspace} disabled={busy} />
         </div>
       </div>
     </div>

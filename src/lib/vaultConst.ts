@@ -1,6 +1,7 @@
 /**
- * Shared between the real lock screen (screens/Authentication.tsx) and the
- * dev-only fake-data seeder (lib/fakeData.ts).
+ * Shared between the real lock screen (screens/Authentication.tsx), its
+ * change-lock flow (screens/More.tsx), and the dev-only fake-data seeder
+ * (lib/fakeData.ts).
  *
  * Split out to a leaf module rather than exported from Authentication.tsx
  * itself: fakeData.ts is imported by store.tsx, and Authentication.tsx
@@ -8,11 +9,6 @@
  * would have closed a cycle back through it. A small constant with no
  * dependencies of its own doesn't need to sit inside the screen that
  * happens to use it first.
- *
- * The vault's actual PIN is never a constant — see VaultLock in
- * Authentication.tsx, which has the owner choose one on first use and
- * derives everything from that. Only the dev preview's own demo PIN lives
- * as a constant, in fakeData.ts, since it never touches a real vault.
  */
 
 /** Encrypted and stored at setup time; decrypting it back correctly is how a
@@ -50,3 +46,14 @@ export type LockIconId = (typeof LOCK_ICON_IDS)[number]
 export function sequenceToPassphrase(ids: readonly string[]): string {
   return ids.join(',')
 }
+
+/**
+ * What a fresh install locks itself with, silently, the same way the
+ * vault's very first version always provisioned itself with the fixed
+ * digit PIN 6666 — a known default, changeable any time from More →
+ * Settings → Vault lock (see ChangeVaultLock in screens/More.tsx), not a
+ * secret. Anyone reading this file knows it; the owner is expected to
+ * change it, the same way a router's default admin password is meant to
+ * be changed rather than kept.
+ */
+export const DEFAULT_LOCK_SEQUENCE: LockIconId[] = ['anchor', 'anchor', 'anchor', 'anchor']

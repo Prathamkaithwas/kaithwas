@@ -20,15 +20,12 @@ import { MOOD_TAGS } from '../types'
 import { addDays, todayKey } from './date'
 import { CHART_COLORS, uid } from './seed'
 import { deriveVaultKey, encryptJSON, encryptText, randomSaltB64 } from './crypto'
-import { CANARY, sequenceToPassphrase } from './vaultConst'
+import { CANARY, DEFAULT_LOCK_SEQUENCE, sequenceToPassphrase } from './vaultConst'
 
-/** Dev preview only — real installs have the owner pick their own four-icon
- *  sequence in VaultLock (Authentication.tsx). Fixed here purely so the
- *  fake vault entries this file seeds are unlockable without going through
- *  that setup: heart, star, sun, moon, tapped in the same grid VaultLock
- *  itself renders. */
-const DEV_DEMO_SEQUENCE = ['heart', 'star', 'sun', 'moon']
-const DEV_DEMO_PASSPHRASE = sequenceToPassphrase(DEV_DEMO_SEQUENCE)
+/** Same default a real install locks itself with — see DEFAULT_LOCK_SEQUENCE
+ *  in vaultConst.ts — so the fake vault entries this file seeds are
+ *  unlockable with the same tap-anchor-four-times a fresh phone opens with. */
+const DEV_DEMO_PASSPHRASE = sequenceToPassphrase(DEFAULT_LOCK_SEQUENCE)
 
 /**
  * Dev-only sample data — every screen has something real to look at instead
@@ -369,11 +366,11 @@ export function withFakeData(db: DB): DB {
 /**
  * The vault and passwords are encrypted at rest, so seeding them needs a
  * real key rather than a plain object literal. This provisions the vault's
- * lock with DEV_DEMO_SEQUENCE above and encrypts each sample entry under
- * it — so opening it for the first time in the dev preview finds it
- * already unlocked-ready and full (tap heart, star, sun, moon), the same
- * as every other screen the fake data touches, without going through
- * VaultLock's real first-use setup flow.
+ * lock with the same DEFAULT_LOCK_SEQUENCE a real install silently opens
+ * with (vaultConst.ts) and encrypts each sample entry under it — so
+ * opening it for the first time in the dev preview finds it already
+ * unlocked-ready and full (tap anchor four times), the same as every
+ * other screen the fake data touches.
  *
  * Kept separate from `withFakeData` because encryption is async and that
  * one isn't; the call site awaits this as its own step.

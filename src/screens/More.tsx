@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Category, DB, ImportantDate, RepeatFreq, RepeatRule, Settings } from '../types'
 import { FIELD_LABEL, TYPE_LABEL } from '../types'
 import { useStore } from '../store'
@@ -14,6 +14,10 @@ import { AccountEditor } from './Accounts'
 import { BudgetSetting } from './Budget'
 import type { ExtraPage } from '../App'
 import { orderedTransTabs } from './Trans'
+import { decryptText, deriveVaultKey, encryptText, randomSaltB64 } from '../lib/crypto'
+import { CANARY, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
+import { VaultIconPad, VaultPinCells } from '../components/VaultIconPad'
+import { hapticError, hapticLight, hapticMedium } from '../lib/haptics'
 
 type Page = null | 'config' | 'pc' | 'backup' | 'style' | 'help' | 'feedback'
 
@@ -478,6 +482,9 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
         onClick={() => setPage('dates')}
       />
       <Row label="Quick add" value={onOff(s.quickAdd)} onClick={() => flip('quickAdd')} />
+
+      <SectionLabel>Vault</SectionLabel>
+      <Row label="Vault lock" value="Change sequence" onClick={() => setSheet('vaultLock')} />
       <div className="h-8" />
 
       {page === 'accountGroup' && <AccountGroups onBack={() => setPage(null)} />}
@@ -604,7 +611,108 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
           </button>
         </div>
       </Sheet>
+
+      <Sheet open={sheet === 'vaultLock'} onClose={() => setSheet(null)} title="Vault lock">
+        <ChangeVaultLock onClose={() => setSheet(null)} />
+      </Sheet>
     </Screen>
+  )
+}
+
+/**
+ * Change what unlocks Shafali — enter the current sequence, then pick and
+ * confirm a new one, all inside one sheet rather than sending the owner
+ * back out to the lock screen and in again. Every fresh install opens with
+ * DEFAULT_LOCK_SEQUENCE (vaultConst.ts); this is how it gets changed to
+ * something only the owner knows.
+ */
+function ChangeVaultLock({ onClose }: { onClose: () => void }) {
+  const { db, setVaultSecurity } = useStore()
+  const [step, setStep] = useState<'verify' | 'choose' | 'confirm'>('verify')
+  const [sequence, setSequence] = useState<LockIconId[]>([])
+  const [firstNew, setFirstNew] = useState<LockIconId[] | null>(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const SEQUENCE_LEN = 4
+
+  const onPick = (id: LockIconId) => {
+    setError('')
+    hapticLight()
+    setSequence((s) => (s.length >= SEQUENCE_LEN ? s : [...s, id]))
+  }
+  const onBackspace = () => setSequence((s) => s.slice(0, -1))
+
+  useEffect(() => {
+    if (sequence.length !== SEQUENCE_LEN) return
+    ;(async () => {
+      if (step === 'verify') {
+        if (!db.vaultSecurity) return
+        setBusy(true)
+        try {
+          const key = await deriveVaultKey(sequenceToPassphrase(sequence), db.vaultSecurity.salt)
+          const decoded = await decryptText(key, db.vaultSecurity.check)
+          if (decoded !== CANARY) throw new Error('mismatch')
+          hapticMedium()
+          setSequence([])
+          setStep('choose')
+          setBusy(false)
+        } catch {
+          hapticError()
+          setError('Wrong sequence')
+          setSequence([])
+          setBusy(false)
+        }
+        return
+      }
+      if (step === 'choose') {
+        setFirstNew(sequence)
+        setSequence([])
+        setStep('confirm')
+        return
+      }
+      // step === 'confirm'
+      if (sequence.join() === firstNew?.join()) {
+        setBusy(true)
+        const salt = randomSaltB64()
+        const key = await deriveVaultKey(sequenceToPassphrase(sequence), salt)
+        const check = await encryptText(key, CANARY)
+        setVaultSecurity({ salt, check })
+        hapticMedium()
+        setBusy(false)
+        onClose()
+      } else {
+        hapticError()
+        setError("Didn't match — try again from the new sequence")
+        setFirstNew(null)
+        setSequence([])
+        setStep('choose')
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sequence])
+
+  const label =
+    step === 'verify' ? 'Enter the current sequence' : step === 'choose' ? 'Pick a new sequence' : 'Tap it again to confirm'
+
+  return (
+    <div className="p-4 flex flex-col items-center gap-4">
+      {/* A plain dark card rather than the vault-hero's own styling — this
+          sheet follows the app's light/dark setting like everything else
+          in Settings, and vault-key/vault-pin-cell are hand-tuned for the
+          lock screen's own permanent dark photo backdrop, not either
+          theme. Wrapping them in one keeps the icons readable regardless
+          of which theme is active. */}
+      <div
+        className="w-full rounded-2xl flex flex-col items-center gap-4 py-6"
+        style={{ background: '#182234' }}
+      >
+        <div className="text-[13px] font-semibold" style={{ color: error ? 'var(--expense)' : 'rgba(255,255,255,0.75)' }}>
+          {busy ? 'Checking…' : error || label}
+        </div>
+        <VaultPinCells length={SEQUENCE_LEN} filled={sequence.length} />
+        <VaultIconPad onPick={onPick} onBackspace={onBackspace} disabled={busy} />
+      </div>
+    </div>
   )
 }
 

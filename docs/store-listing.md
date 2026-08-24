@@ -41,7 +41,7 @@ Copy-paste-ready text for submitting Kaithwas to the Google Play Console or App 
 > A night-by-night bedtime/wake dial with a rolling 7-night average and a full activity calendar.
 >
 > **A private, locked vault**
-> Bank accounts, cards, passwords, and documents — photo or PDF, rendered right in the app — behind a lock only you can open: a four-icon sequence you choose yourself, not a password anyone could shoulder-surf off a typed PIN. AES-256-GCM encryption, derived on-device; the passphrase itself is never stored anywhere, not even by the app.
+> Bank accounts, cards, passwords, and documents — photo or PDF, rendered right in the app — behind a lock of four tapped icons instead of a typed PIN, changeable any time from Settings to a sequence only you know. AES-256-GCM encryption, derived on-device; the sequence itself is never stored anywhere, not even by the app.
 >
 > **Loans**
 > EMI tracking, a prepayment-effect calculator, and reminders ahead of each due date.
