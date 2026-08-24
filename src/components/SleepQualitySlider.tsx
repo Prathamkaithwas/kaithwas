@@ -50,6 +50,24 @@ function phaseOf(level: SleepQuality): number {
   return SLEEP_QUALITY_LEVELS.indexOf(level) / (SLEEP_QUALITY_LEVELS.length - 1)
 }
 
+/**
+ * [x%, y%, scale, the phase by which it has fully cleared]
+ *
+ * Clouds are the inverse of the stars: thickest over a rough night and gone
+ * by a good one, clearing one at a time as the phase climbs, while the stars
+ * come out the same way in the other direction. Same four-circle shape the
+ * Sleep screen's own clouds use (see SleepCloud in screens/Sleep.tsx), so the
+ * two read as the same weather.
+ */
+const CLOUDS: [number, number, number, number][] = [
+  [18, 30, 1.15, 0.62],
+  [76, 24, 0.9, 0.45],
+  // Deliberately across the moon — the biggest and the last to clear, so a
+  // rough night reads as properly overcast rather than lightly decorated.
+  [42, 46, 1.35, 0.8],
+  [90, 52, 0.7, 0.34],
+]
+
 /** [x%, y%, how far into the phase it lights up] — fixed rather than random
  *  so the sky doesn't reshuffle on every render. */
 const STARS: [number, number, number][] = [
@@ -257,6 +275,36 @@ export function SleepQualitySlider({
             as one thing instead of one half warming and the other not. */}
         <div className="sleep-scene-sky" aria-hidden />
         <div className="sleep-scene-glow" aria-hidden />
+
+        {/* Under the moon in the stacking order, so a clearing sky reveals
+            it rather than the moon punching through the weather. */}
+        <div className="sleep-scene-clouds" aria-hidden>
+          {CLOUDS.map(([x, y, s, clear], i) => (
+            <svg
+              key={i}
+              className="sleep-scene-cloud"
+              viewBox="-10 -6 20 12"
+              width={44 * s}
+              height={21 * s}
+              style={
+                {
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  '--clear': clear,
+                  '--drift': `${17 + i * 6}s`,
+                  '--delay': `${i * -4}s`,
+                } as React.CSSProperties
+              }
+            >
+              <g>
+                <circle cx="-4" cy="1.2" r="3.4" />
+                <circle cx="0" cy="-1.3" r="4.2" />
+                <circle cx="4.4" cy="1.2" r="3.1" />
+                <ellipse cx="0" cy="3.1" rx="8.2" ry="2.6" />
+              </g>
+            </svg>
+          ))}
+        </div>
 
         <div className="sleep-scene-stars" aria-hidden>
           {STARS.map(([x, y, at], i) => (

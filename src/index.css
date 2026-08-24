@@ -2604,6 +2604,44 @@ button:disabled {
   50% { transform: scale(1.9); }
 }
 
+/* The weather. Thickest over a rough night and gone by a good one — the
+   mirror of the stars above, which come out as these clear. */
+.sleep-scene-clouds {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.sleep-scene-cloud {
+  position: absolute;
+  fill: var(--slp-1);
+  /* Soft enough to read as weather rather than as four grey circles, but
+     not so soft it turns into a smudge at this size. */
+  filter: blur(1.4px);
+  /* Each cloud carries the phase it has cleared by, so they thin out one at
+     a time rather than the whole sky lifting in one step. */
+  opacity: clamp(0, (var(--clear) - var(--phase)) * 3.2, 1);
+  transform: translate(-50%, -50%);
+  animation: sleep-drift var(--drift, 20s) ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+  transition: opacity 300ms linear;
+  will-change: transform;
+}
+/* Barely there — a cloud that visibly races across a 130px panel reads as a
+   loading spinner. This is just enough that the sky is never quite still. */
+@keyframes sleep-drift {
+  from {
+    transform: translate(-50%, -50%) translateX(-5px);
+  }
+  to {
+    transform: translate(-50%, -50%) translateX(5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sleep-scene-cloud {
+    animation: none;
+  }
+}
+
 .sleep-scene-moon {
   position: absolute;
   left: 50%;
@@ -2625,6 +2663,9 @@ button:disabled {
   letter-spacing: 0.01em;
   color: color-mix(in srgb, #fff calc(62% + var(--phase) * 38%), var(--slp-night));
   transition: color 240ms var(--ease-out);
+  /* The clouds sit behind this and drift; the shadow keeps the word legible
+     on the frames one passes underneath it. */
+  text-shadow: 0 1px 6px color-mix(in srgb, var(--slp-deeper) 85%, transparent);
 }
 
 .sleep-scene-track {
