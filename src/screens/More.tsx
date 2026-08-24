@@ -14,8 +14,20 @@ import { AccountEditor } from './Accounts'
 import { BudgetSetting } from './Budget'
 import type { ExtraPage } from '../App'
 import { orderedTransTabs } from './Trans'
-import { decryptText, deriveVaultKey, encryptText, randomSaltB64 } from '../lib/crypto'
-import { CANARY, sequenceToPassphrase, type LockIconId } from '../lib/vaultConst'
+import {
+  decryptJSON,
+  decryptText,
+  deriveVaultKey,
+  encryptJSON,
+  encryptText,
+  randomSaltB64,
+} from '../lib/crypto'
+import {
+  CANARY,
+  sequenceToLegacyPin,
+  sequenceToPassphrase,
+  type LockIconId,
+} from '../lib/vaultConst'
 import { VaultIconPad, VaultPinCells } from '../components/VaultIconPad'
 import { HoldConfirm } from '../components/HoldConfirm'
 import { hapticError, hapticLight, hapticMedium } from '../lib/haptics'
@@ -786,8 +798,11 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
  * something only the owner knows.
  */
 function ChangeVaultLock({ onClose }: { onClose: () => void }) {
-  const { db, setVaultSecurity } = useStore()
+  const { db, setVaultSecurity, updateVaultItemCipher, updatePasswordItemCipher } = useStore()
   const [step, setStep] = useState<'verify' | 'choose' | 'confirm'>('verify')
+  /** The key the current sequence derives, kept from the verify step so
+   *  the confirm step can re-encrypt the vault with it. */
+  const oldKey = useRef<CryptoKey | null>(null)
   const [sequence, setSequence] = useState<LockIconId[]>([])
   const [firstNew, setFirstNew] = useState<LockIconId[] | null>(null)
   const [error, setError] = useState('')
@@ -808,9 +823,16 @@ function ChangeVaultLock({ onClose }: { onClose: () => void }) {
         if (!db.vaultSecurity) return
         setBusy(true)
         try {
-          const key = await deriveVaultKey(sequenceToPassphrase(sequence), db.vaultSecurity.salt)
-          const decoded = await decryptText(key, db.vaultSecurity.check)
-          if (decoded !== CANARY) throw new Error('mismatch')
+          // Same legacy fallback as the lock screen — a vault still
+          // provisioned by the digit build has to be able to get in here to
+          // migrate itself off it. See sequenceToLegacyPin in vaultConst.ts.
+          const salt = db.vaultSecurity.salt
+          let key = await tryKey(sequenceToPassphrase(sequence), salt, db.vaultSecurity.check)
+          if (!key) key = await tryKey(sequenceToLegacyPin(sequence), salt, db.vaultSecurity.check)
+          if (!key) throw new Error('mismatch')
+          // Held so the confirm step can decrypt every saved entry with it
+          // and re-encrypt them under the new sequence.
+          oldKey.current = key
           hapticMedium()
           setSequence([])
           setStep('choose')
@@ -834,11 +856,59 @@ function ChangeVaultLock({ onClose }: { onClose: () => void }) {
         setBusy(true)
         const salt = randomSaltB64()
         const key = await deriveVaultKey(sequenceToPassphrase(sequence), salt)
-        const check = await encryptText(key, CANARY)
-        setVaultSecurity({ salt, check })
-        hapticMedium()
-        setBusy(false)
-        onClose()
+
+        /**
+         * Re-encrypt everything under the new key *before* swapping the
+         * lock.
+         *
+         * This used to write the new salt and canary and nothing else, which
+         * silently destroyed the vault: every item stays encrypted under the
+         * key derived from the old sequence, and once the canary only
+         * answers to the new one there is nothing left that can decrypt
+         * them. Changing your lock emptied your vault, and the failure only
+         * showed up later as a list of "Could not decrypt this entry".
+         *
+         * Built in full first and committed in one go, so a failure part way
+         * through leaves the old lock and the old ciphers untouched rather
+         * than half a vault under each key.
+         */
+        const prev = oldKey.current
+        if (!prev) {
+          setError('Something went wrong — start again')
+          setStep('verify')
+          setSequence([])
+          setBusy(false)
+          return
+        }
+        try {
+          const vaultNext: { id: string; cipher: string }[] = []
+          for (const item of db.vaultItems) {
+            const plain = await decryptJSON<unknown>(prev, item.cipher)
+            vaultNext.push({ id: item.id, cipher: await encryptJSON(key, plain) })
+          }
+          const pwNext: { id: string; cipher: string }[] = []
+          for (const item of db.passwordItems) {
+            const plain = await decryptJSON<unknown>(prev, item.cipher)
+            pwNext.push({ id: item.id, cipher: await encryptJSON(key, plain) })
+          }
+
+          const check = await encryptText(key, CANARY)
+          for (const v of vaultNext) updateVaultItemCipher(v.id, v.cipher)
+          for (const v of pwNext) updatePasswordItemCipher(v.id, v.cipher)
+          setVaultSecurity({ salt, check })
+          hapticMedium()
+          setBusy(false)
+          onClose()
+        } catch {
+          // One unreadable item means the whole vault cannot be carried
+          // across, and swapping the lock anyway would strand the rest.
+          hapticError()
+          setError('Could not move every entry across — lock unchanged')
+          setStep('verify')
+          setSequence([])
+          setFirstNew(null)
+          setBusy(false)
+        }
       } else {
         hapticError()
         setError("Didn't match — try again from the new sequence")
@@ -1881,4 +1951,20 @@ function Feedback({ onBack }: { onBack: () => void }) {
       />
     </Screen>
   )
+}
+
+/** Derives a key from `passphrase` and returns it only if it decrypts the
+ *  stored canary — the one way to tell a right sequence from a wrong one
+ *  without the passphrase ever being written down. */
+async function tryKey(
+  passphrase: string,
+  salt: string,
+  check: string,
+): Promise<CryptoKey | null> {
+  try {
+    const key = await deriveVaultKey(passphrase, salt)
+    return (await decryptText(key, check)) === CANARY ? key : null
+  } catch {
+    return null
+  }
 }

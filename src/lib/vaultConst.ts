@@ -57,3 +57,31 @@ export function sequenceToPassphrase(ids: readonly string[]): string {
  * be changed rather than kept.
  */
 export const DEFAULT_LOCK_SEQUENCE: LockIconId[] = ['anchor', 'anchor', 'anchor', 'anchor']
+
+/**
+ * The same taps, encoded the way the vault's *first* version encoded them.
+ *
+ * That version was a four-digit keypad, and a lock set on it stored a canary
+ * encrypted under the typed digits — "6666" for the fixed default it shipped
+ * with. When the lock became four tapped icons, the nine icons were laid out
+ * so that tapping the sixth (anchor) four times reproduced that default, and
+ * DEFAULT_LOCK_SEQUENCE was set to anchor x4 for exactly that reason.
+ *
+ * What was never carried across is the *string* the key is derived from.
+ * `sequenceToPassphrase` joins icon ids with commas, so the same four taps
+ * now derive a key from "anchor,anchor,anchor,anchor" rather than "6666" —
+ * a completely different key, and therefore a canary that will not decrypt.
+ * Every vault provisioned by the digit build was locked out by the upgrade,
+ * with its contents intact but unreachable.
+ *
+ * This rebuilds the old string from a tapped sequence — each icon's position
+ * in the grid, 1-9, joined with nothing between them — so the original
+ * passphrase can be tried as a fallback and those vaults open again. It is a
+ * read path for old data, not a second way to lock a vault: nothing new is
+ * ever provisioned with it.
+ */
+export function sequenceToLegacyPin(ids: readonly string[]): string {
+  return ids
+    .map((id) => (LOCK_ICON_IDS as readonly string[]).indexOf(id) + 1)
+    .join('')
+}
