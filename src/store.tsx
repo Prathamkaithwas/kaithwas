@@ -26,6 +26,8 @@ import type {
   SleepQuality,
   PurchaseItem,
   StockItem,
+  Balance,
+  BalanceEntry,
   Supplier,
   Transaction,
   VaultCategory,
@@ -147,6 +149,17 @@ interface Ctx {
   updateSupplier: (s: Supplier) => void
   deleteSupplier: (id: string) => void
   reorderSuppliers: (ids: string[]) => void
+
+  addBalance: (b: Omit<Balance, 'id' | 'order' | 'entries'>) => void
+  updateBalance: (b: Balance) => void
+  /** Puts the person away without destroying the history — the running
+   *  account is the record of what happened, not a scratchpad. */
+  archiveBalance: (id: string) => void
+  restoreBalance: (id: string) => void
+  deleteBalance: (id: string) => void
+  addBalanceEntry: (balanceId: string, e: Omit<BalanceEntry, 'id'>) => void
+  updateBalanceEntry: (balanceId: string, e: BalanceEntry) => void
+  removeBalanceEntry: (balanceId: string, entryId: string) => void
 
   /** Records one reflection answer on a day, creating the day's entry if the
    *  mood itself hasn't been set yet. An empty string clears the answer. */
@@ -905,6 +918,57 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }))
       },
 
+      addBalance(b) {
+        mut((d) => ({
+          ...d,
+          balances: [...d.balances, { ...b, id: uid(), order: d.balances.length, entries: [] }],
+        }))
+      },
+      updateBalance(b) {
+        mut((d) => ({ ...d, balances: d.balances.map((x) => (x.id === b.id ? b : x)) }))
+      },
+      archiveBalance(id) {
+        mut((d) => ({
+          ...d,
+          balances: d.balances.map((x) => (x.id === id ? { ...x, archived: true } : x)),
+        }))
+      },
+      restoreBalance(id) {
+        mut((d) => ({
+          ...d,
+          balances: d.balances.map((x) => (x.id === id ? { ...x, archived: false } : x)),
+        }))
+      },
+      deleteBalance(id) {
+        mut((d) => ({ ...d, balances: d.balances.filter((x) => x.id !== id) }))
+      },
+      addBalanceEntry(balanceId, e) {
+        mut((d) => ({
+          ...d,
+          balances: d.balances.map((b) =>
+            b.id === balanceId ? { ...b, entries: [...b.entries, { ...e, id: uid() }] } : b,
+          ),
+        }))
+      },
+      updateBalanceEntry(balanceId, e) {
+        mut((d) => ({
+          ...d,
+          balances: d.balances.map((b) =>
+            b.id === balanceId
+              ? { ...b, entries: b.entries.map((x) => (x.id === e.id ? e : x)) }
+              : b,
+          ),
+        }))
+      },
+      removeBalanceEntry(balanceId, entryId) {
+        mut((d) => ({
+          ...d,
+          balances: d.balances.map((b) =>
+            b.id === balanceId ? { ...b, entries: b.entries.filter((x) => x.id !== entryId) } : b,
+          ),
+        }))
+      },
+
       setMoodAnswer(date, promptId, text) {
         mut((d) => {
           const existing = d.moodLogs.find((m) => m.date === date)
@@ -1148,6 +1212,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             suppliers: [
               ...d.suppliers,
               ...(incoming.suppliers ?? []).filter((s) => !has(d.suppliers, s.id)),
+            ],
+            balances: [
+              ...d.balances,
+              ...(incoming.balances ?? []).filter((b) => !has(d.balances, b.id)),
             ],
             journalPrompts: [
               ...d.journalPrompts,

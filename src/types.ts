@@ -795,6 +795,82 @@ export interface Supplier {
   order: number
 }
 
+/**
+ * One line in a person's running account — the shop's udhaar khata, kept as
+ * a list of movements rather than a single "amount owed" number.
+ *
+ * A stored total would answer "how much" and nothing else. What actually
+ * gets argued about across a counter is *which* items, and *what* was paid
+ * against them — so every take and every settlement is its own dated line
+ * and the balance is derived from them. It also means a mistake is a line
+ * to correct, not a total to overwrite from memory.
+ */
+export interface BalanceEntry {
+  id: string
+  /** YYYY-MM-DD */
+  date: string
+  /** 'took' adds to what they owe; 'paid' settles some of it. */
+  kind: 'took' | 'paid'
+  /** integer paise, always positive — `kind` carries the direction. For a
+   *  settlement in goods or work, this is what it was reckoned to be worth. */
+  amount: number
+  /** What the line was for — "2 bags cement", "wiring at the new shop". */
+  note?: string
+  /**
+   * Settled in goods or work rather than money.
+   *
+   * Half the settlements in a shop are not cash — someone squares up with a
+   * day's labour or by handing back stock. Recording those as cash would
+   * quietly overstate what actually came through the till, so they carry a
+   * value for the balance's sake but stay marked as what they were.
+   */
+  inKind?: boolean
+}
+
+/**
+ * One person's running account: what they have taken on credit, what they
+ * have paid back, and what is left.
+ *
+ * Deliberately not a Loan. A Loan is money this shop owes, on fixed terms
+ * with an EMI and an end date. This is the other direction and has no terms
+ * at all — someone takes goods on Tuesday and squares up whenever they can,
+ * in whatever combination of cash and kind suits them.
+ */
+export interface Balance {
+  id: string
+  name: string
+  phone?: string
+  /** Anything worth remembering — which shop, whose brother, what was agreed. */
+  note?: string
+  entries: BalanceEntry[]
+  order: number
+  /** Settled and put away. Nothing is destroyed — the history stays readable. */
+  archived?: boolean
+}
+
+/** What is still owed, in paise. Negative means the shop owes them — which
+ *  happens on an overpayment and should read as such rather than clamping to
+ *  zero and quietly losing the difference. */
+export function balanceOf(b: Pick<Balance, 'entries'>): number {
+  return b.entries.reduce((n, e) => n + (e.kind === 'took' ? e.amount : -e.amount), 0)
+}
+
+/** The oldest date carrying an unsettled amount, for "pending since". Once
+ *  payments cover everything older, that date moves forward on its own. */
+export function owingSince(b: Pick<Balance, 'entries'>): string | undefined {
+  const lines = [...b.entries].sort((a, c) => (a.date < c.date ? -1 : 1))
+  let paid = lines.filter((e) => e.kind === 'paid').reduce((n, e) => n + e.amount, 0)
+  for (const e of lines) {
+    if (e.kind !== 'took') continue
+    if (paid >= e.amount) {
+      paid -= e.amount
+      continue
+    }
+    return e.date
+  }
+  return undefined
+}
+
 export interface Settings {
   currencySymbol: string
   symbolBefore: boolean
@@ -885,6 +961,7 @@ export interface DB {
   stockItems: StockItem[]
   purchaseItems: PurchaseItem[]
   suppliers: Supplier[]
+  balances: Balance[]
   journalPrompts: JournalPrompt[]
   plannerTasks: PlannerTask[]
   settings: Settings

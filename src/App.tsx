@@ -19,6 +19,7 @@ import {
   BarChart3,
   Landmark,
   HandCoins,
+  Users,
   Package,
   History,
   Star,
@@ -29,6 +30,7 @@ import { WeekPicker } from './components/WeekPicker'
 import { Hidden } from './screens/Hidden'
 import { TAB_THEME, TITLE_TABS, Total, Trans, orderedTransTabs, type TransTab } from './screens/Trans'
 import { PlannerSheet } from './screens/Planner'
+import { BalancePanel } from './screens/Balance'
 import { SuppliersSheet } from './screens/Suppliers'
 import { Stats, STATS_PERIODS, type StatsPeriod, type StatsRange } from './screens/Stats'
 import { Accounts } from './screens/Accounts'
@@ -67,6 +69,7 @@ export type ExtraPage =
   | 'accounts'
   | 'total'
   | 'loans'
+  | 'balance'
   | 'stock'
   | 'lastDone'
   | 'kitee'
@@ -75,6 +78,7 @@ const EXTRA_TITLE: Record<ExtraPage, string> = {
   accounts: 'Accounts',
   total: 'Total',
   loans: 'Loans',
+  balance: 'Balance',
   stock: 'Taruna',
   lastDone: 'Muskan',
   kitee: 'Khushi',
@@ -256,6 +260,7 @@ function ExtraScreen({
         )}
         {page === 'accounts' && <Accounts month={month} onEdit={onEdit} />}
         {page === 'loans' && <Loans />}
+        {page === 'balance' && <BalancePanel />}
         {page === 'stock' && <StockPanel />}
         {page === 'lastDone' && <LastDone editing={choreEditor} onCloseEditor={onCloseChore} />}
         {page === 'kitee' && <PurchasePanel />}
@@ -295,6 +300,7 @@ const MENU_ROWS: [string, ExtraPage | 'settings', LucideIcon][] = [
   ['Stats', 'stats', BarChart3],
   ['Accounts', 'accounts', Landmark],
   ['Loans', 'loans', HandCoins],
+  ['Balance', 'balance', Users],
   ['Taruna', 'stock', Package],
   ['Muskan', 'lastDone', History],
   // Last in the list — bottom of the hold-and-drag menu, right above Settings.

@@ -333,6 +333,7 @@ export function importMmbak(bytes: Uint8Array): { db: DB; report: ImportReport }
       stockItems: [],
       purchaseItems: [],
       suppliers: [],
+      balances: [],
       journalPrompts: [],
       plannerTasks: [],
       settings,

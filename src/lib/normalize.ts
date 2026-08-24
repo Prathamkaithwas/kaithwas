@@ -172,6 +172,9 @@ export function normalizeDB(input: Partial<DB> | null | undefined): DB {
     stockItems: base.stockItems ?? [],
     purchaseItems: base.purchaseItems ?? [],
     suppliers: base.suppliers ?? [],
+    // Entries default too: a person record from a build before entries
+    // existed would otherwise crash every balance calculation on undefined.
+    balances: (base.balances ?? []).map((b) => ({ ...b, entries: b.entries ?? [] })),
     // Seeded rather than left empty for a database saved before prompts
     // existed — an upgrade should find the three questions already there,
     // the same as a fresh install, not an empty Journal with no way to know

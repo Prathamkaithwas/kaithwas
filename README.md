@@ -76,6 +76,15 @@ Bank accounts (with real network marks — Visa, Mastercard, RuPay — not gener
 ### Loans
 EMI tracking against real loan terms, a prepayment-effect calculator (what does paying an extra ₹10,000 today actually save in interest?), and reminders that fire ahead of each due date.
 
+### Balance — the shop's udhaar khata
+Who owes the shop money, and how long it has been that way. The mirror of Loans, which tracks money going the other way on fixed terms; this has no terms at all, because a customer takes goods on Tuesday and squares up whenever they can.
+
+Each person is a running account rather than a stored total — every take and every settlement is its own dated line, and the balance is derived from them. A stored number answers "how much" and nothing else; what actually gets argued about across a counter is *which* items and *what* was paid against them.
+
+Settlements can be **cash or in kind**. Half of them in a real shop are not money — someone squares up with a day's labour or by handing back stock. Those count against the debt but stay marked as goods, so they never read as cash that came through the till.
+
+The list sorts by how overdue a debt is rather than by size: a small amount owed since March is the one worth a phone call, a large one from yesterday is just business. Anything past a month colours itself. One button opens WhatsApp with "₹2,400 pending since 12 August" already written — you still pick the chat and press send.
+
 ### Purchases & stock
 A supplier rate book, not just a shopping list: each item can carry variants — colour, size, base, whatever it actually varies by — generated from a trait builder rather than typed out combination by combination. Categories fold shut and **stay** shut across app restarts, so a long list doesn't have to be re-collapsed every time the app opens. A bulk buy ("50 metres for ₹1,000") is entered as what the bill actually says and divided down into a rate for you.
 

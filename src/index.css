@@ -6411,3 +6411,216 @@ button:disabled {
   background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 
+
+/* ==========================================================================
+   Balance — the shop's udhaar khata.
+
+   Reads as a page of debts, so the two things that matter are big: the
+   amount, and how long it has been sitting there. Aging is coloured rather
+   than left as grey detail, because a small sum owed since March is the one
+   worth a phone call and a large one from yesterday is just business.
+   ========================================================================== */
+
+.bal-total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 16px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.bal-total-v {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.bal-total-l {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.bal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 13px 14px;
+  margin-bottom: 8px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.bal-row[data-dim] {
+  opacity: 0.55;
+}
+.bal-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bal-row-name {
+  font-size: 15.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bal-row-sub {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bal-row-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.bal-row-amt {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--expense);
+}
+.bal-row-amt[data-clear] {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+}
+.bal-row-age {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+/* Past a month it stops being a detail and starts being the point. */
+.bal-row-age[data-old] {
+  color: var(--expense);
+}
+
+.bal-settled-toggle {
+  width: 100%;
+  padding: 10px 0;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.bal-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bal-detail-amt {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--expense);
+}
+.bal-detail-amt[data-clear] {
+  color: var(--muted);
+}
+.bal-detail-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.bal-edit {
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.bal-act {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--text);
+  border: 1.5px solid var(--line);
+}
+.bal-act[data-took] {
+  color: var(--expense);
+  border-color: color-mix(in srgb, var(--expense) 40%, transparent);
+}
+.bal-act[data-paid] {
+  color: var(--income);
+  border-color: color-mix(in srgb, var(--income) 40%, transparent);
+}
+
+.bal-lines {
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.bal-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.bal-line:last-child {
+  border-bottom: none;
+}
+.bal-line-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.bal-line-date {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.bal-line-note {
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.bal-line-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.bal-line-amt {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.bal-line[data-kind='took'] .bal-line-amt {
+  color: var(--expense);
+}
+.bal-line[data-kind='paid'] .bal-line-amt {
+  color: var(--income);
+}
+/* Marked, not hidden — a settlement in goods counts against the debt but
+   never came through the till, and the history has to say which it was. */
+.bal-line-kind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

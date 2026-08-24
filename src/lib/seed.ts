@@ -144,6 +144,7 @@ export function seedDB(): DB {
     stockItems: [],
     purchaseItems: [],
     suppliers: [],
+    balances: [],
     journalPrompts: DEFAULT_JOURNAL_PROMPTS,
     plannerTasks: [],
     settings: { ...DEFAULT_SETTINGS },
