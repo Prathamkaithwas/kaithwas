@@ -13,6 +13,7 @@ import { HABIT_ICON_IDS, HABIT_ICON_LABEL, HabitIcon } from '../lib/habitIcons'
 import { useCountUp } from '../lib/useCountUp'
 import { useToast } from '../components/Toast'
 import { fileToPhoto } from '../lib/photo'
+import { PhotoCropper, HABIT_TILE_ASPECT } from '../components/PhotoCropper'
 import { cancelHabitReminders, ensureNotificationPermission, syncHabitReminders } from '../lib/notifications'
 
 /** How many days each tile's dot row shows. */
@@ -1221,6 +1222,9 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
   const [surface, setSurface] = useState<string | undefined>(habit?.surface)
   const [customSurfaceImage, setCustomSurfaceImage] = useState(habit?.customSurfaceImage)
   const [customBusy, setCustomBusy] = useState(false)
+  /** Freshly picked, waiting to be framed — kept apart from
+   *  `customSurfaceImage` so cancelling leaves the existing surface alone. */
+  const [cropping, setCropping] = useState<string | null>(null)
   const customFileRef = useRef<HTMLInputElement>(null)
   const [metered, setMetered] = useState(!!habit?.unit)
   const [unit, setUnit] = useState(habit?.unit ?? 'min')
@@ -1520,7 +1524,12 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
                 color: surface === 'custom' ? '#fff' : 'var(--text-2)',
               }}
               disabled={customBusy}
-              onClick={() => customFileRef.current?.click()}
+              // Already has a photo? Reopen the framing rather than the file
+              // picker — adjusting is the common second visit, and "Another
+              // photo" inside the cropper covers the rest.
+              onClick={() =>
+                customSurfaceImage ? setCropping(customSurfaceImage) : customFileRef.current?.click()
+              }
             >
               {customSurfaceImage && (
                 <img src={customSurfaceImage} alt="" className="w-4 h-4 rounded-full object-cover" />
@@ -1538,8 +1547,8 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
                 if (!file) return
                 setCustomBusy(true)
                 try {
-                  setCustomSurfaceImage(await fileToPhoto(file))
-                  setSurface('custom')
+                  // Framed before it is committed — see PhotoCropper.
+                  setCropping(await fileToPhoto(file))
                 } catch {
                   /* an unreadable file just leaves the previous surface in place */
                 } finally {
@@ -1549,6 +1558,23 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
             />
           </div>
         </div>
+
+        {cropping && (
+          <PhotoCropper
+            src={cropping}
+            aspect={HABIT_TILE_ASPECT}
+            onCancel={() => setCropping(null)}
+            onPickAnother={() => {
+              setCropping(null)
+              customFileRef.current?.click()
+            }}
+            onDone={(shot) => {
+              setCustomSurfaceImage(shot)
+              setSurface('custom')
+              setCropping(null)
+            }}
+          />
+        )}
 
         <div className="flex items-center gap-2 pt-2">
           {habit && (

@@ -30,6 +30,7 @@ import {
 import { Bar, Empty, Money, Sheet, SummaryBar } from '../components/ui'
 import { TxRow } from '../components/TxRow'
 import { fileToPhoto, photosOf } from '../lib/photo'
+import { PhotoCropper, NOTE_CARD_ASPECT } from '../components/PhotoCropper'
 
 // Total, Loans, Stats, Accounts, Stock, Last Done and Kitee now live in the
 // More menu — they are looked at occasionally, and giving them permanent
@@ -890,6 +891,10 @@ function MemoEditor({
   const [skin, setSkin] = useState<string | undefined>(memo?.skin)
   const [customSkinImage, setCustomSkinImage] = useState(memo?.customSkinImage)
   const [skinBusy, setSkinBusy] = useState(false)
+  /** The freshly-picked photo, waiting to be framed. Held apart from
+   *  `customSkinImage` so cancelling the cropper leaves whatever skin was
+   *  already there untouched. */
+  const [cropping, setCropping] = useState<string | null>(null)
   const skinFileRef = useRef<HTMLInputElement>(null)
 
   const addItem = () => {
@@ -991,7 +996,12 @@ function MemoEditor({
                     : undefined
                 }
                 disabled={skinBusy}
-                onClick={() => skinFileRef.current?.click()}
+                // With a photo already chosen this reopens the framing rather
+                // than the file picker — adjusting it is the far more common
+                // second visit, and "Another photo" inside covers the rest.
+                onClick={() =>
+                  customSkinImage ? setCropping(customSkinImage) : skinFileRef.current?.click()
+                }
                 aria-label="Custom photo skin"
                 aria-pressed={skin === 'custom'}
               >
@@ -1008,8 +1018,8 @@ function MemoEditor({
                   if (!file) return
                   setSkinBusy(true)
                   try {
-                    setCustomSkinImage(await fileToPhoto(file))
-                    setSkin('custom')
+                    // Framed before it is committed — see PhotoCropper.
+                    setCropping(await fileToPhoto(file))
                   } catch {
                     /* an unreadable file just leaves the previous skin alone */
                   } finally {
@@ -1019,6 +1029,23 @@ function MemoEditor({
               />
             </div>
           </div>
+
+          {cropping && (
+            <PhotoCropper
+              src={cropping}
+              aspect={NOTE_CARD_ASPECT}
+              onCancel={() => setCropping(null)}
+              onPickAnother={() => {
+                setCropping(null)
+                skinFileRef.current?.click()
+              }}
+              onDone={(shot) => {
+                setCustomSkinImage(shot)
+                setSkin('custom')
+                setCropping(null)
+              }}
+            />
+          )}
 
           <div>
             <div className="text-[11px] mb-1.5" style={{ color: 'var(--muted)' }}>
