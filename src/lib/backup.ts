@@ -120,6 +120,18 @@ export interface AutoBackupState {
   where: string
   /** Set only when the most recent attempt failed. */
   error?: string
+  /**
+   * The last date a copy was actually sent off this phone, YYYY-MM-DD.
+   *
+   * Tracked separately from `lastDate` because they answer different
+   * questions. The daily snapshot proves the books are written down; this
+   * proves they exist somewhere the phone's own misfortunes cannot reach.
+   * A drawer full of daily snapshots on a stolen phone is not a backup.
+   */
+  lastOffDevice?: string
+  /** Set when the overdue nudge was last dismissed, so it asks again in a
+   *  week rather than every single time the app opens. */
+  snoozedOn?: string
 }
 
 const AUTO_KEY = 'autoBackup'
@@ -178,4 +190,62 @@ export async function runDailyBackup(db: unknown, today: string): Promise<void> 
       error: result.where,
     })
   }
+}
+
+
+/** How many days of books are at risk — the gap since a copy last left the
+ *  phone. `undefined` means one never has, which is the worst case and is
+ *  deliberately not reported as zero. */
+export function daysSinceOffDevice(today: string): number | undefined {
+  const last = readAutoBackupState()?.lastOffDevice
+  if (!last) return undefined
+  const a = new Date(last + 'T12:00').getTime()
+  const b = new Date(today + 'T12:00').getTime()
+  if (!isFinite(a) || !isFinite(b)) return undefined
+  return Math.max(0, Math.round((b - a) / 86400000))
+}
+
+/** A week is the most books anyone should be willing to retype. */
+const OFF_DEVICE_GRACE = 7
+
+/** Whether to raise the nudge: overdue, and not already waved away this week. */
+export function offDeviceOverdue(today: string): boolean {
+  const state = readAutoBackupState()
+  if (!state) return false
+  const snoozed = state.snoozedOn
+  if (snoozed) {
+    const days = Math.round(
+      (new Date(today + 'T12:00').getTime() - new Date(snoozed + 'T12:00').getTime()) / 86400000,
+    )
+    if (isFinite(days) && days < OFF_DEVICE_GRACE) return false
+  }
+  const since = daysSinceOffDevice(today)
+  return since === undefined || since >= OFF_DEVICE_GRACE
+}
+
+export function snoozeOffDeviceNudge(today: string): void {
+  const state = readAutoBackupState()
+  writeAutoBackupState({ ...(state ?? { lastDate: '', where: '' }), snoozedOn: today })
+}
+
+/**
+ * Write a snapshot and hand it straight to the share sheet, so a copy can go
+ * to WhatsApp, Drive, or anywhere else off this phone in one action.
+ *
+ * The date is recorded only when the whole thing succeeds. The share sheet
+ * being dismissed rejects, and that has to count as "not sent" — marking it
+ * done on a cancelled share would be the app reassuring itself, which is the
+ * one thing a backup feature must never do.
+ */
+export async function sendBackupOffDevice(db: unknown, today: string): Promise<SaveResult> {
+  const result = await saveFile(`kaithwas-${today}.json`, JSON.stringify(db), "application/json")
+  if (result.ok) {
+    const state = readAutoBackupState()
+    writeAutoBackupState({
+      ...(state ?? { lastDate: '', where: '' }),
+      lastOffDevice: today,
+      snoozedOn: undefined,
+    })
+  }
+  return result
 }

@@ -93,7 +93,17 @@ Suppliers get a directory of their own behind the header's phone icon — a numb
 ### Stats
 Where the money actually went, as a pie by category with a drill-down into subcategories — and a second level below that, so "how much on family" and "how much to one specific person" are both one tap away. Weekly, monthly, annually, all-time, or a **custom date range** with one-tap presets (last 7 / 30 / 90 days, last year) for the spans that don't line up with a calendar month — a festival week straddling two months, one supplier's billing cycle, everything since the shop reopened.
 
+### Search across everything
+One box over the whole app — entries, notes, loans, the Balance book, the rate book, suppliers and stock — because the thing you go hunting for by a half-remembered word is rarely a transaction. Each result carries enough of its own content that the answer is usually readable in the list without going anywhere. Shafali is deliberately **not** searched: documents behind the lock screen stay behind it rather than having their titles listed out here.
+
+### It learns your own habits, on the phone
+Type "recharge" into an entry and the app offers the category and account you filed the last thirty like it under, with the number of past entries backing the guess so it can be judged rather than just trusted. It is one tap to accept and free to ignore — never applied silently, because a wrong category discovered weeks later in a total is worse than no suggestion at all.
+
+Pure counting over your own history: substring and word overlap, aged so recent habits outvote old ones. No model, no service, nothing leaves the device — the only kind of prediction that belongs in an app whose whole premise is that the data never goes anywhere.
+
 ### Backup that means it
+The app also keeps track of the separate question of whether a copy has ever left the phone — a drawer full of daily snapshots on a stolen phone is not a backup. **Settings → Backup** shows how long it has been and sends one in a tap, and the app asks about it at most once a week if it has been ignored.
+
 One JSON export captures the *entire* database — every transaction, habit, note, loan, and every photo and PDF attached to any of them — so a restore brings back everything, not just the numbers. Runs automatically once a day on-device, and old snapshots are never pruned: disk is cheap, and a retention rule is a rule that could one day delete the last good copy.
 
 ## Under the hood

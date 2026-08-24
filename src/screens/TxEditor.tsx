@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import type { Transaction, TxType } from '../types'
 import { FIELD_LABEL, TYPE_LABEL } from '../types'
 import { useStore } from '../store'
 import { formatAmount } from '../lib/money'
 import { formatDateLong, toLocalISO, parseISO } from '../lib/date'
 import { accountName, categoryName } from '../lib/calc'
+import { predictEntry } from '../lib/predict'
 import { Keypad } from '../components/Keypad'
 import { useBackHandler } from '../lib/back'
 import {
@@ -212,6 +213,30 @@ export function TxEditor({
         .filter((n) => n !== draft.note)
         .slice(0, 4)
     : []
+
+  /**
+   * The category and account this entry probably wants, counted from past
+   * entries with similar wording — see lib/predict.ts.
+   *
+   * Only offered when it actually disagrees with what is already selected,
+   * so it appears as a correction worth reading rather than a chip
+   * restating the obvious on every entry. Rides the same Autocomplete
+   * setting as the note suggestions above; it is the same promise.
+   */
+  const guess = useMemo(() => {
+    if (!db.settings.autocomplete) return null
+    const text = `${draft.note} ${draft.description}`.trim()
+    const p = predictEntry(db, draft.type, text)
+    if (!p) return null
+    const catNew = p.categoryId && p.categoryId !== draft.categoryId
+    const accNew = p.accountId && p.accountId !== draft.accountId
+    if (!catNew && !accNew) return null
+    return {
+      categoryId: catNew ? p.categoryId : undefined,
+      accountId: accNew ? p.accountId : undefined,
+      support: p.support,
+    }
+  }, [db, draft.note, draft.description, draft.type, draft.categoryId, draft.accountId])
 
   function validate(): string {
     if (draft.amount <= 0) return 'Enter an amount'
@@ -628,6 +653,32 @@ export function TxEditor({
               </button>
             ))}
           </div>
+        )}
+
+        {/* Not applied on its own — a guess that silently rewrites the
+            category would be discovered weeks later in a total that is
+            quietly wrong. It is one tap to accept and free to ignore. */}
+        {guess && (
+          <button
+            className="tx-guess"
+            onClick={() =>
+              set({
+                ...(guess.categoryId ? { categoryId: guess.categoryId } : null),
+                ...(guess.accountId ? { accountId: guess.accountId } : null),
+              })
+            }
+          >
+            <span className="tx-guess-l">Usually</span>
+            <span className="tx-guess-v">
+              {[
+                guess.categoryId ? categoryName(db, guess.categoryId) : '',
+                guess.accountId ? accountName(db, guess.accountId) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+            <span className="tx-guess-n num">{guess.support}×</span>
+          </button>
         )}
 
         {field(

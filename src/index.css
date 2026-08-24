@@ -6624,3 +6624,173 @@ button:disabled {
   text-transform: uppercase;
   color: var(--muted);
 }
+
+/* ==========================================================================
+   Global search — everything that is not a ledger entry, grouped by where
+   it lives. Each row carries enough of its own content that the answer is
+   usually readable without going anywhere.
+   ========================================================================== */
+
+.gsearch-head {
+  padding: 14px 16px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gsearch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.gsearch-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gsearch-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Two lines of the body, not one — a note is usually found by something in
+   the middle of it, and a single clipped line rarely contains the word you
+   searched for. */
+.gsearch-sub {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gsearch-right {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.gsearch-note {
+  padding: 16px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* The category/account guess in the entry editor. Sits between the note and
+   the memo, where the words it is reading were just typed — and reads as a
+   quiet offer rather than a control, because ignoring it is the common and
+   perfectly fine outcome. */
+.tx-guess {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 16px;
+  text-align: left;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: fade-in var(--dur) var(--ease-out);
+}
+.tx-guess-l {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.tx-guess-v {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* How many past entries back the guess — shown so it can be judged rather
+   than just trusted. */
+.tx-guess-n {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   "A copy off this phone" — the backup that actually survives losing the
+   device. Given its own block rather than another status line, because it
+   is the one that loses data when it is ignored.
+   ========================================================================== */
+
+.offdev {
+  margin: 8px 12px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+/* Overdue, or never done at all. */
+.offdev[data-late] {
+  background: color-mix(in srgb, var(--expense) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--expense) 40%, transparent);
+}
+.offdev-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.offdev-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.offdev-age {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.offdev[data-late] .offdev-age {
+  color: var(--expense);
+}
+.offdev-body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.offdev-btn {
+  width: 100%;
+  padding: 11px 0;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+}
+.offdev-btn:disabled {
+  opacity: 0.6;
+}
+.offdev-result {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  color: var(--income);
+}
+.offdev-result[data-bad] {
+  color: var(--expense);
+}

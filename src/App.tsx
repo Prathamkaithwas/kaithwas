@@ -45,7 +45,12 @@ import { Authentication } from './screens/Authentication'
 import { categoryName } from './lib/calc'
 import { CAT, LOTUS, PixelIcon, SHARK, type PixelArt } from './components/PixelIcon'
 import { LotusMark } from './components/LotusMark'
-import { runDailyBackup } from './lib/backup'
+import {
+  offDeviceOverdue,
+  runDailyBackup,
+  sendBackupOffDevice,
+  snoozeOffDeviceNudge,
+} from './lib/backup'
 import { useSwipe } from './lib/useSwipe'
 import { hapticLight, hapticMedium } from './lib/haptics'
 import { ripple } from './lib/fx'
@@ -472,6 +477,16 @@ function Shell() {
   const [search, setSearch] = useState<null | 'plain' | 'filters'>(null)
   const [favorites, setFavorites] = useState(false)
   const [plannerOpen, setPlannerOpen] = useState(false)
+  /**
+   * The "get a copy off this phone" nudge.
+   *
+   * Raised once, a beat after the shell is ready, rather than watched — so
+   * it can never interrupt something already in progress. It asks at most
+   * once a week (see snoozeOffDeviceNudge): a prompt on every launch is one
+   * you learn to dismiss without reading, which is worse than not asking.
+   */
+  const [offDeviceAsk, setOffDeviceAsk] = useState(false)
+  const [offDeviceSending, setOffDeviceSending] = useState(false)
   const [moreRequest, setMoreRequest] = useState<DeepLink | null>(null)
   const [extraPage, setExtraPage] = useState<ExtraPage | null>(null)
   const [moreMenu, setMoreMenu] = useState(false)
@@ -631,8 +646,16 @@ function Shell() {
     if (!ready) return
     const run = () => void runDailyBackup(dbRef.current, todayKey())
     run()
+    // Asked after the daily snapshot has had a moment to land, so the state
+    // it reads is today's rather than yesterday's.
+    const ask = setTimeout(() => {
+      if (offDeviceOverdue(todayKey())) setOffDeviceAsk(true)
+    }, 2500)
     const tick = setInterval(run, 3600_000)
-    return () => clearInterval(tick)
+    return () => {
+      clearInterval(tick)
+      clearTimeout(ask)
+    }
   }, [ready])
 
   // Daily reminder — fires while the app is open; a true push needs a server.
@@ -1288,6 +1311,52 @@ function Shell() {
         )}
       </Sheet>
 
+      <Sheet
+        open={offDeviceAsk}
+        onClose={() => {
+          snoozeOffDeviceNudge(todayKey())
+          setOffDeviceAsk(false)
+        }}
+        title="Keep a copy somewhere else"
+      >
+        <div className="p-4 space-y-4">
+          <p className="text-[14.5px] leading-relaxed" style={{ color: 'var(--text)' }}>
+            Your books are backed up every day — but only onto this phone. If it
+            is lost, stolen or broken, those backups go with it.
+          </p>
+          <p className="text-[14.5px] leading-relaxed" style={{ color: 'var(--text)' }}>
+            Send yourself a copy on WhatsApp, or put one in Drive. It takes a
+            few seconds and it is the difference between an inconvenience and
+            starting over.
+          </p>
+          <button
+            className="w-full py-3 rounded-lg text-white text-[15px] font-semibold"
+            style={{ background: 'var(--accent)' }}
+            disabled={offDeviceSending}
+            onClick={async () => {
+              setOffDeviceSending(true)
+              const r = await sendBackupOffDevice(db, todayKey())
+              setOffDeviceSending(false)
+              // Only closes when it actually went. A cancelled share sheet
+              // leaves the prompt up, because nothing has been solved.
+              if (r.ok) setOffDeviceAsk(false)
+            }}
+          >
+            {offDeviceSending ? 'Preparing…' : 'Send a copy now'}
+          </button>
+          <button
+            className="w-full py-2 text-[13px]"
+            style={{ color: 'var(--muted)' }}
+            onClick={() => {
+              snoozeOffDeviceNudge(todayKey())
+              setOffDeviceAsk(false)
+            }}
+          >
+            Remind me next week
+          </button>
+        </div>
+      </Sheet>
+
       <PlannerSheet open={plannerOpen} onClose={() => setPlannerOpen(false)} />
 
       <Sheet open={favorites} onClose={() => setFavorites(false)} title="Frequent entries">
@@ -1324,6 +1393,15 @@ function Shell() {
           openFilters={search === 'filters'}
           onBack={() => setSearch(null)}
           onEdit={openEditor}
+          onOpenPage={(page) => {
+            setSearch(null)
+            setExtraPage(page)
+          }}
+          onOpenNotes={() => {
+            setSearch(null)
+            setTab('Trans.')
+            setSub('Niba')
+          }}
         />
       )}
 

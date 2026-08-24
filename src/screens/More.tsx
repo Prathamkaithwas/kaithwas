@@ -6,9 +6,15 @@ import { ACCENT_PRESETS } from '../lib/seed'
 import { formatAmount } from '../lib/money'
 import { accountLabel, accountName, categoryLabel, categoryName } from '../lib/calc'
 import { Confirm, Empty, Money, Row, Screen, SectionLabel, Sheet } from '../components/ui'
-import { dayLabel, daysUntilDate, relativeDayLabel, toLocalISO } from '../lib/date'
+import { dayLabel, daysUntilDate, relativeDayLabel, todayKey, toLocalISO } from '../lib/date'
 import { importMmbak, type ImportReport } from '../lib/mmbak'
-import { readAutoBackupState, saveFile, type SaveResult } from '../lib/backup'
+import {
+  daysSinceOffDevice,
+  readAutoBackupState,
+  saveFile,
+  sendBackupOffDevice,
+  type SaveResult,
+} from '../lib/backup'
 import { looksLikeBackup, normalizeDB } from '../lib/normalize'
 import { AccountEditor } from './Accounts'
 import { BudgetSetting } from './Budget'
@@ -1438,7 +1444,16 @@ function Backup({ onBack }: { onBack: () => void }) {
   const [exportState, setExportState] = useState<SaveResult | 'saving' | null>(null)
   // Read once on open. It is written by the background job, not by this
   // screen, so there is nothing here to keep in sync.
-  const [auto] = useState(() => readAutoBackupState())
+  const [auto, setAuto] = useState(() => readAutoBackupState())
+  const [sending, setSending] = useState<SaveResult | 'sending' | null>(null)
+  const offDays = daysSinceOffDevice(todayKey())
+
+  const sendOff = async () => {
+    setSending('sending')
+    const r = await sendBackupOffDevice(db, todayKey())
+    setSending(r)
+    setAuto(readAutoBackupState())
+  }
 
   const doExport = async () => {
     setExportState('saving')
@@ -1543,6 +1558,39 @@ function Backup({ onBack }: { onBack: () => void }) {
           that copy somewhere off the phone.
         </div>
       )}
+
+      {/* The daily snapshot proves the books are written down. This is the
+          separate question of whether they exist anywhere the phone's own
+          bad luck cannot reach — a drawer of daily snapshots on a stolen
+          phone is not a backup. Given its own block, and coloured by how
+          long it has been, because it is the one that actually loses data. */}
+      <div className="offdev" data-late={offDays === undefined || offDays >= 7 || undefined}>
+        <div className="offdev-head">
+          <span className="offdev-title">A copy off this phone</span>
+          <span className="offdev-age">
+            {offDays === undefined
+              ? 'never sent'
+              : offDays === 0
+                ? 'sent today'
+                : offDays === 1
+                  ? 'sent yesterday'
+                  : `${offDays} days ago`}
+          </span>
+        </div>
+        <p className="offdev-body">
+          {offDays === undefined || offDays >= 7
+            ? 'Everything is on this one phone. If it is lost, stolen or broken, the daily backups go with it.'
+            : 'Send one whenever you like — WhatsApp to yourself is enough.'}
+        </p>
+        <button className="offdev-btn" disabled={sending === 'sending'} onClick={sendOff}>
+          {sending === 'sending' ? 'Preparing…' : 'Send a copy now'}
+        </button>
+        {sending && sending !== 'sending' && (
+          <p className="offdev-result" data-bad={!sending.ok || undefined}>
+            {sending.ok ? `Sent — also saved to ${sending.where}` : `Could not send — ${sending.where}`}
+          </p>
+        )}
+      </div>
 
       <div className="h-2" />
       <Row

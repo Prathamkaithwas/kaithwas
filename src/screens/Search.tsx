@@ -5,16 +5,24 @@ import { useStore } from '../store'
 import { accountName, categoryName, profitOf, totalsOf } from '../lib/calc'
 import { Empty, Screen, SummaryBar } from '../components/ui'
 import { TxRow } from '../components/TxRow'
+import { formatMoney } from '../lib/money'
+import { balanceOf } from '../types'
+import type { ExtraPage } from '../App'
 
 const TYPES: (TxType | 'all')[] = ['all', 'income', 'expense', 'transfer']
 
 export function Search({
   onBack,
   onEdit,
+  onOpenPage,
+  onOpenNotes,
   openFilters,
 }: {
   onBack: () => void
   onEdit: (tx: Transaction) => void
+  /** Jump to whichever More screen a non-entry match lives on. */
+  onOpenPage: (page: ExtraPage) => void
+  onOpenNotes: () => void
   openFilters?: boolean
 }) {
   const { db } = useStore()
@@ -54,6 +62,72 @@ export function Search({
 
   const t = totalsOf(results)
 
+  /**
+   * Everything that is not a ledger entry.
+   *
+   * The filters above are all transaction-shaped — type, account, category,
+   * deal — so they deliberately do not narrow these; a date range means
+   * nothing to a supplier's phone number. Only the typed words apply.
+   *
+   * Shafali is not searched. Documents are not encrypted the way vault
+   * entries are, but they sit behind the lock screen, and that screen is
+   * the boundary: listing a document's title out here would walk it around
+   * the lock without asking for the sequence.
+   */
+  const elsewhere = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return []
+    const hit = (...parts: (string | undefined)[]) =>
+      parts.filter(Boolean).join(' ').toLowerCase().includes(needle)
+
+    const groups: { label: string; page: 'notes' | ExtraPage; items: { id: string; title: string; sub?: string; right?: string }[] }[] = []
+
+    const notes = db.memos
+      .filter((m) => hit(m.title, m.body, ...(m.checklist ?? []).map((c) => c.text)))
+      .slice(0, 8)
+      .map((m) => ({ id: m.id, title: m.title || 'Untitled note', sub: m.body || undefined, right: m.date.slice(8, 10) + '/' + m.date.slice(5, 7) }))
+    if (notes.length) groups.push({ label: 'Niba — notes', page: 'notes', items: notes })
+
+    const loans = db.loans
+      .filter((l) => !l.archived && hit(l.lender, l.purpose, l.loanAccountNumber, l.notes))
+      .slice(0, 6)
+      .map((l) => ({ id: l.id, title: l.lender, sub: l.purpose || undefined, right: formatMoney(l.emiAmount, db.settings) }))
+    if (loans.length) groups.push({ label: 'Loans', page: 'loans', items: loans })
+
+    const owed = db.balances
+      .filter((b) => hit(b.name, b.phone, b.note, ...b.entries.map((e) => e.note ?? '')))
+      .slice(0, 6)
+      .map((b) => ({ id: b.id, title: b.name, sub: b.note || b.phone || undefined, right: formatMoney(balanceOf(b), db.settings) }))
+    if (owed.length) groups.push({ label: 'Balance', page: 'balance', items: owed })
+
+    const rates = db.purchaseItems
+      .filter((x) => hit(x.name, x.variant, x.supplier, x.category, x.subcategory, x.notes))
+      .slice(0, 8)
+      .map((x) => ({
+        id: x.id,
+        title: x.name + (x.variant ? ' ' + x.variant : ''),
+        sub: [x.subcategory, x.supplier].filter(Boolean).join(' · ') || undefined,
+        right: formatMoney(x.rate, db.settings) + (x.unit ? '/' + x.unit : ''),
+      }))
+    if (rates.length) groups.push({ label: 'Khushi — rate book', page: 'kitee', items: rates })
+
+    const suppliers = db.suppliers
+      .filter((x) => hit(x.name, x.phone, x.notes))
+      .slice(0, 6)
+      .map((x) => ({ id: x.id, title: x.name, sub: x.notes || undefined, right: x.phone }))
+    if (suppliers.length) groups.push({ label: 'Suppliers', page: 'kitee', items: suppliers })
+
+    const stock = db.stockItems
+      .filter((x) => hit(x.name, x.notes))
+      .slice(0, 6)
+      .map((x) => ({ id: x.id, title: x.name, sub: x.notes || undefined, right: x.quantity }))
+    if (stock.length) groups.push({ label: 'Taruna — stock', page: 'stock', items: stock })
+
+    return groups
+  }, [db, q])
+
+  const nothing = results.length === 0 && elsewhere.length === 0
+
   return (
     <Screen
       title="Search"
@@ -72,7 +146,7 @@ export function Search({
         <input
           className="w-full px-3 py-2 rounded-lg text-[14px]"
           style={{ background: 'var(--bg)' }}
-          placeholder="Search notes, categories, accounts"
+          placeholder="Search entries, notes, loans, rates, people"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoFocus
@@ -156,10 +230,39 @@ export function Search({
       )}
 
       <SummaryBar income={t.income} expense={t.expense} profit={profitOf(results)} />
-      {results.length === 0 && <Empty text="No matches" />}
+      {nothing && <Empty text="No matches" />}
       {results.map((tx) => (
         <TxRow key={tx.id} tx={tx} onEdit={onEdit} showDate />
       ))}
+
+      {/* Everything that isn't a ledger entry, grouped by where it lives, so
+          a half-remembered word finds the note or the rate it was actually
+          in. Each row carries enough of its own content that the answer is
+          often readable here without going anywhere. */}
+      {elsewhere.map((group) => (
+        <div key={group.label}>
+          <div className="gsearch-head">{group.label}</div>
+          {group.items.map((item) => (
+            <button
+              key={item.id}
+              className="gsearch-row"
+              onClick={() => (group.page === 'notes' ? onOpenNotes() : onOpenPage(group.page))}
+            >
+              <span className="gsearch-main">
+                <span className="gsearch-title">{item.title}</span>
+                {item.sub && <span className="gsearch-sub">{item.sub}</span>}
+              </span>
+              {item.right && <span className="gsearch-right num">{item.right}</span>}
+            </button>
+          ))}
+        </div>
+      ))}
+
+      {q.trim() && (
+        <div className="gsearch-note">
+          Shafali isn't searched — what's behind the lock stays behind it.
+        </div>
+      )}
     </Screen>
   )
 }
