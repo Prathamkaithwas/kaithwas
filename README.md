@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/icon.png" width="88" height="88" alt="Kaithwas icon" />
+<img src="docs/icon.png" width="88" height="88" alt="Kaithwas icon" />
 
 # Kaithwas
 
@@ -59,8 +59,14 @@ A running notebook of dated notes, newest first, that never disappears just beca
 ### Habits & mood
 Two kinds of habit: a plain tap-to-mark-done, and a **metered** one you build up through the day (pages read, glasses of water) with its own extra row of stats — best run, last-30-days average — instead of just a streak. Nine hand-picked moods replace a generic 1–5 scale, and the mood shown on the Habits tab **carries forward** day to day until you log a new one, rather than resetting to a blank "tap to log" prompt every midnight. Every day's mood and its optional note also read as a **journal** — newest first, straight down the page — not just a calendar of coloured squares. Each habit can pick from eight animated card surfaces (dither, lenticular, specular, foil, metaball, moiré, aurora, grid) — press and hold a card to see it move — or a **custom photo** from the gallery instead, for whoever gets bored of the eight built-in ones.
 
+Any habit can also carry **daily reminders** — a list of clock times, not a single one, so something like medicine taken three times a few minutes apart is just three reminders rather than a special repeat rule nobody can edit later. These are real scheduled Android notifications and fire whether or not the app is open.
+
+Picking the day's mood then opens a short **written reflection** — "what is worth remembering about today?", "what could have gone better?", "what are you thankful for?". Both the questions and how many there are are yours: **More → Configuration → Journal questions** edits the list in place, and deleting one keeps every answer already written against it, so putting the question back brings its history back too. Answers are filed with the day and read back in the Journal, which defaults to showing only days something was actually written on — a month of bare mood taps is a chart, not something anyone re-reads.
+
 ### Sleep
 A 24-hour dial, not a 12-hour one — bedtime and wake time can't land on the same point the way they would on a half-day face, so the two handles are never ambiguous to drag. A rolling 7-night average sits above it, with a full year-of-squares activity calendar below.
+
+Each night also takes a **quality rating** and a **dream note**. The rating is a slider you drag or tap, drawn as a moon that actually waxes under your thumb — clouded over and dark at "Rough", a clear full moon with the stars out at "Great" — with the sky behind it warming toward sunrise as the rating climbs. It's driven by three springs on one animation frame (thumb, label, moon phase), so the moon keeps moving for a beat after your finger stops instead of snapping between five fixed pictures. Anything remembered on waking goes in a note underneath, and every rated or written-up night collects into a **dream journal** below the calendar — newest first, read straight down, rather than tapped open one square at a time.
 
 ### Shafali — the private vault
 Bank accounts (with real network marks — Visa, Mastercard, RuPay — not generic rings), cards, passwords, and documents, behind a lock of four tapped icons instead of a typed PIN. A fresh install opens with a known default (four taps of the same icon — see `DEFAULT_LOCK_SEQUENCE` in `src/lib/vaultConst.ts`, the same way the very first version shipped with a fixed digit PIN); **More → Configuration → Vault lock** changes it to a sequence only the owner knows, in one sheet — enter the current one, pick a new one, confirm it. AES-256-GCM encryption, keyed by a PBKDF2-derived key from whatever sequence is active (150,000 iterations); the sequence itself is never stored anywhere, only a salt and an encrypted "canary" string used to tell a right sequence from a wrong one without ever knowing the right one in plain form. Documents (photo or PDF scans, rendered right in the app with a real PDF preview) sit behind the same screen but aren't encrypted the same way, since they're not the kind of thing that needs it — bank details and passwords are.
@@ -69,7 +75,12 @@ Bank accounts (with real network marks — Visa, Mastercard, RuPay — not gener
 EMI tracking against real loan terms, a prepayment-effect calculator (what does paying an extra ₹10,000 today actually save in interest?), and reminders that fire ahead of each due date.
 
 ### Purchases & stock
-A supplier rate book, not just a shopping list: each item can carry variants — colour, size, base, whatever it actually varies by — generated from a trait builder rather than typed out combination by combination. Categories fold shut and **stay** shut across app restarts, so a long list doesn't have to be re-collapsed every time the app opens.
+A supplier rate book, not just a shopping list: each item can carry variants — colour, size, base, whatever it actually varies by — generated from a trait builder rather than typed out combination by combination. Categories fold shut and **stay** shut across app restarts, so a long list doesn't have to be re-collapsed every time the app opens. A bulk buy ("50 metres for ₹1,000") is entered as what the bill actually says and divided down into a rate for you.
+
+Suppliers get a directory of their own behind the header's phone icon — a number you can tap to call straight from the list, plus room for terms, delivery days, who to ask for. Kept separate from the plain supplier *name* typed on each rate: most items only ever need the name, and a rate is filed under a name rather than under a phone number.
+
+### Stats
+Where the money actually went, as a pie by category with a drill-down into subcategories — and a second level below that, so "how much on family" and "how much to one specific person" are both one tap away. Weekly, monthly, annually, all-time, or a **custom date range** with one-tap presets (last 7 / 30 / 90 days, last year) for the spans that don't line up with a calendar month — a festival week straddling two months, one supplier's billing cycle, everything since the shop reopened.
 
 ### Backup that means it
 One JSON export captures the *entire* database — every transaction, habit, note, loan, and every photo and PDF attached to any of them — so a restore brings back everything, not just the numbers. Runs automatically once a day on-device, and old snapshots are never pruned: disk is cheap, and a retention rule is a rule that could one day delete the last good copy.
@@ -90,7 +101,7 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5180` — the app runs fully in the browser for development, IndexedDB and all. A first run seeds realistic sample data automatically in dev mode (never in a production build), including a demo vault unlockable by tapping **heart → star → sun → moon**.
+Opens at `http://localhost:5180` — the app runs fully in the browser for development, IndexedDB and all. A first run seeds realistic sample data automatically in dev mode (never in a production build), including a demo vault unlockable with **four taps of the anchor** — the same `DEFAULT_LOCK_SEQUENCE` a fresh install provisions itself with, so the demo data and a real first run open the same way.
 
 ### Build the Android app
 
@@ -101,6 +112,10 @@ cd android && ./gradlew assembleDebug
 ```
 
 Requires the Android SDK and JDK 21 on `JAVA_HOME`. The resulting APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+### Rebuilding it with an AI agent
+
+[`docs/rebuild-prompt.md`](docs/rebuild-prompt.md) is a staged set of prompts for recreating this app from scratch in a fresh agent session (Antigravity, Claude Code, Cursor — whichever), including the list of things to explicitly tell the agent *not* to do. Every entry on that list was built during the original development and then removed, so it's the shortest path to the version that actually works rather than the generic one an agent reaches for first.
 
 ### Publishing to an app store
 
@@ -119,6 +134,7 @@ src/
   store.tsx    The single app-wide store — one context, one reducer-shaped API
 android/       Capacitor's native Android project
 docs/
+  rebuild-prompt.md   Staged prompts for rebuilding this app with an AI agent
   store-listing.md    Copy-paste-ready app store submission text
   screenshots/        Drop real device screenshots here
 ```
