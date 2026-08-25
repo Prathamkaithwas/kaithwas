@@ -325,6 +325,7 @@ export function importMmbak(bytes: Uint8Array): { db: DB; report: ImportReport }
       hiddenTransactions: [],
       hiddenMemos: [],
       vaultItems: [],
+      partnerItems: [],
       passwordItems: [],
       docItems: [],
       loans: [],

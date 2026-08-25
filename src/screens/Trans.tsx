@@ -692,7 +692,7 @@ const NIBA_TONES = 4
  * Each is a gradient plus a sheen and a texture (see .niba-card in
  * index.css), so they read as a surface rather than a flat fill.
  */
-export const NOTE_SKINS = [
+const NOTE_SKINS = [
   'blossom',
   'orchid',
   'iris',
@@ -1039,10 +1039,10 @@ function MemoEditor({
               src={cropping}
               aspect={NOTE_CARD_ASPECT}
               onCancel={() => setCropping(null)}
-              onPickAnother={() => {
-                setCropping(null)
-                skinFileRef.current?.click()
-              }}
+              // Stays open on purpose — see the same note on the habit
+              // card's cropper. Cancelling the system picker used to leave
+              // you with neither the new photo nor the framing you had.
+              onPickAnother={() => skinFileRef.current?.click()}
               onDone={(shot) => {
                 setCustomSkinImage(shot)
                 setSkin('custom')

@@ -159,6 +159,7 @@ export function normalizeDB(input: Partial<DB> | null | undefined): DB {
     hiddenTransactions: base.hiddenTransactions ?? [],
     hiddenMemos: base.hiddenMemos ?? [],
     vaultItems: base.vaultItems ?? [],
+    partnerItems: base.partnerItems ?? [],
     passwordItems: base.passwordItems ?? [],
     // A document used to carry one `photo` string rather than a `photos`
     // array — every doc saved before that change still has the old field on

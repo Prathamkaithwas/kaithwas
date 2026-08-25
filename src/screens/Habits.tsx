@@ -29,7 +29,7 @@ const RECENT_DAYS = 14
  * battery for something nobody is looking at; six cards that come alive under
  * a thumb cost nothing the rest of the time.
  */
-export const HABIT_SURFACES = [
+const HABIT_SURFACES = [
   'dither',
   'lenticular',
   'specular',
@@ -68,31 +68,83 @@ const STARS: [x: number, y: number, r: number, rays: number][] = [
   [40, 104, 1.9, 0], [86, 112, 3.2, 18], [16, 120, 2.2, 0], [60, 130, 2.5, 0],
 ]
 
-/** Crenellations along the top of a wall — the shape that says "castle"
- *  before any other detail registers. */
-function battlements(x: number, w: number, y: number, step = 5) {
-  const out = []
-  for (let i = 0; x + i * step < x + w; i++) {
-    if (i % 2 === 0) out.push(<rect key={`${x}-${i}`} x={x + i * step} y={y - 3} width={step} height={4} />)
-  }
-  return out
-}
+/**
+ * The skyline itself, traced from `public/img/habits-castle.jpg`.
+ *
+ * That image is the cross-stitch chart this tab was always meant to sit on,
+ * and it was dropped because its grid lines and its watermark showed. Those
+ * were never geometry, only pixels, so tracing loses them and keeps the
+ * thing worth keeping.
+ *
+ * The chart is a clean 100 x 25 stitches, so nothing here was eyeballed:
+ * every cell centre was sampled and classified stone / lit window / sky, and
+ * the stone cells were merged into one outline by cancelling the edges any
+ * two of them share. What survived is this path, at two units per stitch —
+ * a 200 x 50 viewBox, 204 corners, ~1.5KB, against the 34KB of the JPEG, and
+ * sharp at any size the phone asks for.
+ *
+ * The stitch steps along every tower are kept deliberately. They are what
+ * the picture is; smoothing them would make this a redrawing of the castle
+ * rather than that castle.
+ *
+ * The single subpath after the `Z` is a real hole — one arch under the
+ * viaduct that closes at the top. The rest of the arches run off the bottom
+ * edge, so they are notches in the outer wall rather than holes.
+ */
+const CASTLE_PATH =
+  'M46 0 L48 0 L48 4 L50 4 L50 8 L52 8 L52 12 L54 12 L54 16 L56 16 L56 18 L58 18 L58 20 ' +
+  'L56 20 L56 30 L54 30 L54 34 L62 34 L62 30 L64 30 L64 28 L66 28 L66 32 L68 32 L68 28 ' +
+  'L70 28 L70 24 L72 24 L72 18 L74 18 L74 22 L76 22 L76 26 L78 26 L78 38 L80 38 L80 36 ' +
+  'L94 36 L94 32 L96 32 L96 30 L98 30 L98 24 L100 24 L100 18 L102 18 L102 22 L104 22 ' +
+  'L104 30 L106 30 L106 32 L108 32 L108 18 L110 18 L110 14 L112 14 L112 10 L114 10 L114 6 ' +
+  'L116 6 L116 14 L118 14 L118 20 L120 20 L120 16 L122 16 L122 24 L120 24 L120 28 L122 28 ' +
+  'L122 26 L124 26 L124 28 L126 28 L126 30 L130 30 L130 22 L132 22 L132 18 L134 18 L134 24 ' +
+  'L136 24 L136 26 L138 26 L138 24 L140 24 L140 22 L142 22 L142 24 L144 24 L144 26 L146 26 ' +
+  'L146 34 L156 34 L156 32 L158 32 L158 30 L160 30 L160 32 L162 32 L162 36 L164 36 L164 28 ' +
+  'L166 28 L166 22 L168 22 L168 18 L170 18 L170 14 L172 14 L172 28 L174 28 L174 38 L176 38 ' +
+  'L176 40 L180 40 L180 42 L186 42 L186 44 L192 44 L192 46 L198 46 L198 48 L200 48 L200 50 ' +
+  'L114 50 L114 42 L112 42 L112 50 L110 50 L110 42 L108 42 L108 50 L106 50 L106 42 L104 42 ' +
+  'L104 50 L102 50 L102 42 L100 42 L100 50 L98 50 L98 42 L96 42 L96 50 L94 50 L94 42 L92 42 ' +
+  'L92 50 L90 50 L90 42 L88 42 L88 50 L86 50 L86 42 L84 42 L84 50 L0 50 L0 48 L2 48 L2 46 ' +
+  'L4 46 L4 44 L6 44 L6 42 L8 42 L8 40 L12 40 L12 22 L14 22 L14 24 L24 24 L24 22 L26 22 ' +
+  'L26 18 L28 18 L28 22 L30 22 L30 24 L38 24 L38 20 L36 20 L36 18 L38 18 L38 16 L40 16 ' +
+  'L40 10 L38 10 L38 8 L36 8 L36 6 L38 6 L38 4 L40 4 L40 6 L42 6 L42 8 L44 8 L44 4 L46 4Z' +
+  'M82 42 L80 42 L80 48 L82 48Z'
 
-/** Lit windows. The three marked `flicker` are the only moving light in the
- *  castle — a whole facade of blinking windows reads as a fairground, one or
- *  two reads as somebody still awake in there. */
-const WINDOWS: [x: number, y: number, w: number, h: number, flicker?: boolean][] = [
-  [10, 80, 2.5, 4], [16, 80, 2.5, 4], [22, 80, 2.5, 4],
-  [28.5, 60, 2.5, 4, true],
-  [55, 70, 3, 5], [62, 70, 3, 5, true], [69, 70, 3, 5],
-  [64.5, 40, 3, 4],
-  [106, 56, 2.5, 4], [106, 66, 2.5, 4, true],
-  [128, 84, 2.5, 3.5], [136, 84, 2.5, 3.5],
-  [156, 64, 2.5, 4], [163, 64, 2.5, 4],
-  [178, 88, 2.5, 3.5],
+/**
+ * [x, y, width] of every window in the chart, in the same units. Height is
+ * always one stitch. Cells that touch side by side were merged, so a wide
+ * window lights as one window rather than as two squares in step.
+ *
+ * The order is the order they light in: bottom rows first, so the Great
+ * Hall's long galleries come on early and the high spire is the last light
+ * in the castle. Within a row the order is scattered by a fixed hash — a
+ * clean bottom-to-top sweep reads as a progress bar, which is exactly what
+ * this is not supposed to be. It is a hash rather than a shuffle so a given
+ * window always lights at the same moment, every day.
+ */
+const CASTLE_WINDOWS: [x: number, y: number, w: number][] = [
+  [40, 40, 2], [120, 40, 4], [148, 38, 2], [18, 38, 2], [26, 38, 2],
+  [34, 38, 2], [58, 38, 2], [120, 38, 4], [152, 38, 2], [14, 38, 2],
+  [22, 38, 2], [30, 38, 2], [54, 38, 2], [62, 38, 2], [40, 36, 2],
+  [112, 36, 2], [120, 36, 4], [168, 36, 2], [126, 36, 2], [116, 36, 2],
+  [140, 36, 2], [130, 36, 2], [100, 34, 2], [116, 34, 2], [140, 34, 2],
+  [18, 34, 2], [26, 34, 2], [34, 34, 2], [130, 34, 2], [64, 34, 2],
+  [112, 34, 2], [14, 34, 2], [22, 34, 2], [30, 34, 2], [126, 34, 2],
+  [158, 34, 2], [120, 32, 4], [14, 32, 2], [22, 32, 2], [30, 32, 2],
+  [140, 32, 2], [18, 32, 2], [26, 32, 2], [34, 32, 2], [140, 30, 2],
+  [72, 30, 2], [168, 28, 2], [100, 28, 2], [168, 26, 2], [132, 26, 2],
+  [168, 24, 2], [112, 22, 2], [112, 20, 2], [40, 18, 2], [46, 18, 2],
+  [52, 18, 2], [46, 14, 2], [42, 14, 2], [50, 14, 2], [44, 10, 2],
+  [48, 10, 2], [46, 6, 2],
 ]
 
-function HabitNight() {
+/** Windows lit before anything at all has been ticked. A castle with every
+ *  light out reads as broken rather than as quiet, and a day you have not
+ *  started is not a day you have failed. */
+const CASTLE_BASE_LIGHTS = 5
+
+function HabitNight({ lit }: { lit: number }) {
   return (
     <div className="habit-night" aria-hidden>
       <div className="habit-sky" />
@@ -130,47 +182,32 @@ function HabitNight() {
         ))}
       </div>
 
-      {/* Anchored to the bottom and allowed to run off both sides, so it
-          reads as a castle you are standing under rather than a picture of
-          one placed on the page. */}
-      <svg className="habit-castle" viewBox="0 0 200 100" preserveAspectRatio="xMidYMax slice">
-        <g className="habit-stone">
-          {/* left wall */}
-          <rect x="0" y="72" width="34" height="28" />
-          {battlements(0, 34, 72)}
-          {/* left tower */}
-          <rect x="24" y="52" width="16" height="48" />
-          {battlements(24, 16, 52, 4)}
-          {/* keep */}
-          <rect x="46" y="60" width="50" height="40" />
-          {battlements(46, 50, 60)}
-          {/* central spire */}
-          <rect x="59" y="34" width="14" height="30" />
-          <polygon points="59,34 66,14 73,34" />
-          {/* right tower with a spire */}
-          <rect x="100" y="48" width="18" height="52" />
-          <polygon points="100,48 109,30 118,48" />
-          {/* right wall */}
-          <rect x="118" y="76" width="46" height="24" />
-          {battlements(118, 46, 76)}
-          {/* far tower */}
-          <rect x="150" y="56" width="18" height="44" />
-          {battlements(150, 18, 56, 4.5)}
-          {/* far wall running off the edge */}
-          <rect x="166" y="80" width="34" height="20" />
-          {battlements(166, 34, 80)}
-        </g>
+      {/* A strip along the foot of the screen, at the art's own 4:1 — the
+          whole skyline, uncropped. Slicing it to fill a taller box would
+          throw away the towers at both ends, which are the reason for
+          using this silhouette instead of a generic one. */}
+      <svg className="habit-castle" viewBox="0 0 200 50" preserveAspectRatio="xMidYMax meet">
+        <path className="habit-stone" d={CASTLE_PATH} />
 
         <g className="habit-windows">
-          {WINDOWS.map(([x, y, w, h, flicker], i) => (
+          {CASTLE_WINDOWS.map(([x, y, w], i) => (
             <rect
               key={i}
               x={x}
               y={y}
               width={w}
-              height={h}
-              className={flicker ? 'habit-window is-alive' : 'habit-window'}
-              style={flicker ? { animationDelay: `${i * 1.3}s` } : undefined}
+              height={2}
+              className={
+                'habit-window' +
+                (i < lit ? ' is-lit' : '') +
+                // A handful of the lit ones flicker. A whole facade of
+                // blinking windows reads as a fairground; one or two reads
+                // as somebody still awake in there.
+                (i % 19 === 4 ? ' is-alive' : '')
+              }
+              // Modulo, not the raw index, so the ripple stays the same
+              // length whether one window just lit or forty did.
+              style={{ transitionDelay: `${(i % 14) * 55}ms`, animationDelay: `${(i % 7) * 1.3}s` }}
             />
           ))}
         </g>
@@ -206,6 +243,33 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
   }, [db.habitLogs])
 
   const today = todayKey()
+
+  // How much of the castle is awake.
+  //
+  // Note what this deliberately is not: the completion card ("2/4") that
+  // used to sit on this screen was removed outright, because a habit list
+  // that is pure journaling has nothing for a percentage to report. This
+  // keeps that. There is no number, no denominator on screen, and no empty
+  // state that reads as a failure — the castle simply has more lights in it
+  // on a day you did more, and a few burning on a day you have not started.
+  // A metered habit counts for the fraction of its target that is actually
+  // logged: `target` is documented on the type as "what counts as the day
+  // being done", so fourteen pages of a twenty-page target is fourteen
+  // twentieths of a light, not a whole one. Treating any log as a full tick
+  // would light the castle for a day barely started, and would also mean the
+  // one habit that *can* grow through the day is the one that never does.
+  const litWindows = useMemo(() => {
+    if (active.length === 0) return CASTLE_BASE_LIGHTS
+    const credit = active.reduce((sum, h) => {
+      const log = db.habitLogs.find((l) => l.habitId === h.id && l.date === today)
+      if (!log) return sum
+      if (!h.unit || !h.target) return sum + 1
+      return sum + Math.min((log.amount ?? 0) / h.target, 1)
+    }, 0)
+    const spare = CASTLE_WINDOWS.length - CASTLE_BASE_LIGHTS
+    return CASTLE_BASE_LIGHTS + Math.round((credit / active.length) * spare)
+  }, [active, db.habitLogs, today])
+
   // Carries the most recent entry forward until today gets its own — the
   // tile used to go back to "Tap to log how you're feeling today" the
   // moment midnight passed, even though nothing about how you're feeling
@@ -237,7 +301,7 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
     // The sky sits in a clipped wrapper alongside the scroller rather than
     // inside it, so it stays put while the tiles scroll over it.
     <div className="relative flex-1 overflow-hidden habit-screen">
-      <HabitNight />
+      <HabitNight lit={litWindows} />
       <div ref={scroller} className="relative h-full overflow-y-auto no-scrollbar pb-content px-3 pt-3">
         {/* Mood is the hero — the thing worth seeing first on opening the
             tab. There used to be a completion-count card here too ("2/4");
@@ -1709,10 +1773,13 @@ function HabitEditor({ habit, onClose }: { habit: Habit | null; onClose: () => v
             src={cropping}
             aspect={HABIT_TILE_ASPECT}
             onCancel={() => setCropping(null)}
-            onPickAnother={() => {
-              setCropping(null)
-              customFileRef.current?.click()
-            }}
+            // Deliberately does NOT close the cropper first. The file input
+            // only reports back when a file is actually chosen, so closing
+            // here meant backing out of the system picker — which is most of
+            // the times it gets opened — dropped the framing you already had
+            // and left you with nothing. Staying open costs nothing: picking
+            // a file replaces `cropping` anyway.
+            onPickAnother={() => customFileRef.current?.click()}
             onDone={(shot) => {
               setCustomSurfaceImage(shot)
               setSurface('custom')

@@ -20,6 +20,7 @@ import {
 import { AttachmentGrid, Confirm, Empty, Fab, SectionLabel, Sheet, SuggestInput } from '../components/ui'
 import { HoldConfirm } from '../components/HoldConfirm'
 import { fileToAttachment, fileToPhoto, isPdfDataUrl } from '../lib/photo'
+import { PhotoCropper, VAULT_CARD_ASPECT } from '../components/PhotoCropper'
 import { renderPdfPage } from '../lib/pdf'
 import { sharePhotos } from '../lib/share'
 import { speakCharacters, type SpeechHandle } from '../lib/speak'
@@ -1298,10 +1299,19 @@ function VaultRow({
       // overflows past the right edge instead of sitting centred — a plain
       // block element already fills the remaining width around its margins
       // on its own.
-      className="vault-row block text-left cursor-pointer"
+      className={`vault-row block text-left cursor-pointer${data.cardImage ? ' has-photo' : ''}`}
       onClick={onOpen}
     >
-      {rowInner}
+      {/* Its own clipped layer, like a habit tile's — the row keeps its own
+          radius and lit edge, and the darkening gradient over the photo is
+          what keeps the title and the copy-fields readable over an
+          arbitrary picture. */}
+      {data.cardImage && (
+        <span className="vault-row-photo" aria-hidden>
+          <img src={data.cardImage} alt="" />
+        </span>
+      )}
+      <span className="vault-row-body">{rowInner}</span>
     </div>
   )
 }
@@ -1326,6 +1336,13 @@ function VaultItemEditor({
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoOpen, setPhotoOpen] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // The photo worn by the row itself, kept apart from `photos` (the
+  // attachments) because it is framed to the card's shape and only one of
+  // it ever exists. `cropping` holds the picture mid-framing, so cancelling
+  // leaves whatever was already set alone.
+  const [cardImage, setCardImage] = useState(initial?.cardImage)
+  const [cropping, setCropping] = useState<string | null>(null)
+  const cardFileRef = useRef<HTMLInputElement>(null)
   const [confirmDel, setConfirmDel] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -1414,6 +1431,7 @@ function VaultItemEditor({
       fields: fields.filter((f) => f.label.trim()),
       notes: notes.trim() || undefined,
       photos: photos.length ? photos : undefined,
+      cardImage,
     }
     const cipher = await encryptJSON(vaultKey, plain)
     if (item) updateVaultItemCipher(item.id, cipher)
@@ -1671,6 +1689,70 @@ function VaultItemEditor({
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={pickPhotos} />
         </div>
+
+        {/* The row's own face. Separate from the attachments above: those are
+            a passbook page or a cheque leaf you open to read, this is what
+            the entry looks like in the list. */}
+        <div className="flex items-center gap-2">
+          <button
+            className="px-3 py-1.5 rounded-full text-[12px] flex items-center gap-1.5"
+            style={{
+              background: cardImage ? 'var(--accent)' : 'var(--bg)',
+              color: cardImage ? '#fff' : 'var(--text-2)',
+            }}
+            disabled={photoBusy}
+            // Already has one? Reopen the framing rather than the picker —
+            // adjusting the crop is the common second visit, and "Another
+            // photo" inside the cropper covers the rest. Same as habits.
+            onClick={() => (cardImage ? setCropping(cardImage) : cardFileRef.current?.click())}
+          >
+            {cardImage && <img src={cardImage} alt="" className="w-4 h-4 rounded-sm object-cover" />}
+            {cardImage ? 'Card photo' : 'Card photo…'}
+          </button>
+          {cardImage && (
+            <button
+              className="text-[12px]"
+              style={{ color: 'var(--muted)' }}
+              onClick={() => setCardImage(undefined)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <input
+          ref={cardFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (!file) return
+            setPhotoBusy(true)
+            try {
+              setCropping(await fileToPhoto(file))
+            } catch {
+              /* an unreadable file leaves the existing face in place */
+            } finally {
+              setPhotoBusy(false)
+            }
+          }}
+        />
+        {cropping && (
+          <PhotoCropper
+            src={cropping}
+            aspect={VAULT_CARD_ASPECT}
+            onCancel={() => setCropping(null)}
+            onPickAnother={() => {
+              setCropping(null)
+              cardFileRef.current?.click()
+            }}
+            onDone={(shot) => {
+              setCardImage(shot)
+              setCropping(null)
+            }}
+          />
+        )}
 
         <textarea
           className="w-full text-[14px] resize-none border-b pb-2"

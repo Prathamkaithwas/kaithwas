@@ -138,6 +138,7 @@ export function seedDB(): DB {
     hiddenTransactions: [],
     hiddenMemos: [],
     vaultItems: [],
+    partnerItems: [],
     passwordItems: [],
     docItems: [],
     loans: [],

@@ -32,6 +32,7 @@ import type {
   Transaction,
   VaultCategory,
   VaultSecurity,
+  PartnerKind,
 } from './types'
 import { DEFAULT_JOURNAL_PROMPTS } from './types'
 import * as store from './lib/db'
@@ -126,6 +127,16 @@ interface Ctx {
   updatePasswordItemCipher: (id: string, cipher: string) => void
   deletePasswordItem: (id: string) => void
   reorderPasswordItems: (ids: string[]) => void
+  /** Partner Journal records. Same encrypted-envelope shape as the vault —
+   *  the caller encrypts, the store only files. Returns the new id so a
+   *  caller can immediately edit what it just wrote. */
+  addPartnerItem: (kind: PartnerKind, cipher: string) => string
+  updatePartnerItemCipher: (id: string, cipher: string) => void
+  deletePartnerItem: (id: string) => void
+  /** Removes every partner record in one go — the "Delete Partner Data"
+   *  option the feature is required to offer. Leaves the vault untouched. */
+  deleteAllPartnerItems: () => void
+
   addDocItem: (d: Omit<DocItem, 'id' | 'order'>) => void
   updateDocItem: (d: DocItem) => void
   deleteDocItem: (id: string) => void
@@ -227,24 +238,50 @@ function runRepeats(db: DB): DB {
  *  predates it. */
 function mergeAttach(db: DB, attach: store.AttachPayload | null): DB {
   if (!attach) return db
-  const union = <T extends { id: string }>(current: T[], incoming: T[]): T[] => {
+  // `incoming` is whatever an older build happened to write. A bucket saved
+  // before a collection existed simply has no key for it, so this must
+  // tolerate undefined rather than assume the shape it expects — the first
+  // launch after any release that adds a collection here reads exactly that.
+  const union = <T extends { id: string }>(current: T[], incoming: T[] | undefined): T[] => {
+    if (!incoming?.length) return current
     const ids = new Set(current.map((x) => x.id))
     return [...current, ...incoming.filter((x) => !ids.has(x.id))]
   }
-  return {
-    ...db,
-    loans: union(db.loans, attach.loans),
-    docItems: union(db.docItems, attach.docItems),
-    vaultItems: union(db.vaultItems, attach.vaultItems),
-    passwordItems: union(db.passwordItems, attach.passwordItems),
-    purchaseItems: union(db.purchaseItems, attach.purchaseItems),
-  }
+  return store.applyPhotoSidecar(
+    {
+      ...db,
+      loans: union(db.loans, attach.loans),
+      docItems: union(db.docItems, attach.docItems),
+      vaultItems: union(db.vaultItems, attach.vaultItems),
+      passwordItems: union(db.passwordItems, attach.passwordItems),
+      partnerItems: union(db.partnerItems, attach.partnerItems),
+      purchaseItems: union(db.purchaseItems, attach.purchaseItems),
+    },
+    attach.photoSidecar,
+  )
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<DB>(() => seedDB())
   const [ready, setReady] = useState(false)
   const loaded = useRef(false)
+  /**
+   * Saving is held until the attachment bucket is in memory.
+   *
+   * `loaded` fires as soon as *core* is in, which is the whole point of the
+   * two-phase load — the app becomes usable without waiting on photos. But a
+   * save in that gap writes the attachment bucket from a DB that does not
+   * have it yet, i.e. writes it empty. It used to self-heal, because
+   * loadAttach had already read the good copy off disk and merged it back a
+   * moment later — but only if the app survived long enough to save again.
+   *
+   * That was survivable when the bucket held loans and documents. It is not
+   * now: the sidecar carries every receipt, note skin and card photo, so the
+   * same window would blank them. Holding the write for the few hundred
+   * milliseconds attach takes costs nothing — nothing is lost, because
+   * merging attach changes `db` and so runs the save effect itself.
+   */
+  const attachReady = useRef(false)
 
   useEffect(() => {
     let alive = true
@@ -282,20 +319,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         setDb(runRepeats(next))
         loaded.current = true
+        // The dev path above already waited for attach, or `full` means
+        // there was never a separate bucket to wait for.
+        attachReady.current = true
         setReady(true)
         return
       }
 
       setDb(runRepeats(next))
       loaded.current = true
+      // `full` is an install that predates the split: core already carried
+      // everything, so there is nothing further to wait on.
+      if (full) attachReady.current = true
       setReady(true)
 
       if (!full) {
         const attach = await store.loadAttach()
         if (!alive) return
+        attachReady.current = true
         // Functional update, not `next` — mut() calls the user made in the
         // gap between `ready` and this resolving (adding a loan, say) are
-        // folded in by id rather than clobbered; see mergeAttach.
+        // folded in by id rather than clobbered; see mergeAttach. This also
+        // re-runs the save effect, which is what persists anything done in
+        // that gap now that saving is held until this point.
         setDb((d) => mergeAttach(d, attach))
       }
     })()
@@ -305,7 +351,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (loaded.current) store.save(db)
+    if (loaded.current && attachReady.current) store.save(db)
   }, [db])
 
   const api = useMemo<Ctx>(() => {
@@ -799,12 +845,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setVaultSecurity(security) {
         mut((d) => ({ ...d, vaultSecurity: security }))
       },
+      addPartnerItem(kind, cipher) {
+        const id = uid()
+        mut((d) => ({
+          ...d,
+          partnerItems: [...d.partnerItems, { id, kind, order: d.partnerItems.length, cipher }],
+        }))
+        return id
+      },
+      updatePartnerItemCipher(id, cipher) {
+        mut((d) => ({
+          ...d,
+          partnerItems: d.partnerItems.map((x) => (x.id === id ? { ...x, cipher } : x)),
+        }))
+      },
+      deletePartnerItem(id) {
+        mut((d) => ({ ...d, partnerItems: d.partnerItems.filter((x) => x.id !== id) }))
+      },
+      deleteAllPartnerItems() {
+        mut((d) => ({ ...d, partnerItems: [] }))
+      },
+
       resetVault() {
         mut((d) => ({
           ...d,
           vaultSecurity: undefined,
           vaultItems: [],
           passwordItems: [],
+          // Partner records are encrypted under the same key. Leaving them
+          // behind after a reset would leave rows nothing can ever open.
+          partnerItems: [],
         }))
       },
 
@@ -1189,6 +1259,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             passwordItems: [
               ...d.passwordItems,
               ...(incoming.passwordItems ?? []).filter((p) => !has(d.passwordItems, p.id)),
+            ],
+            // Same rule as the two above: encrypted under this DB's own key,
+            // so a restore brings the rows across but only the ones written
+            // under the matching lock will open.
+            partnerItems: [
+              ...d.partnerItems,
+              ...(incoming.partnerItems ?? []).filter((p) => !has(d.partnerItems, p.id)),
             ],
             docItems: [
               ...d.docItems,

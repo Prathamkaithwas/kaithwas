@@ -14,6 +14,8 @@ import {
 import { formatMoney } from './lib/money'
 import { Fab, MonthPicker, PeriodStepper, Sheet, SubTabs } from './components/ui'
 import { FanFab } from './components/FanFab'
+import { PHOENIX_PATHS, PHOENIX_VIEWBOX } from './lib/phoenixArt'
+import { Partner } from './screens/Partner'
 import {
   Wallet,
   BarChart3,
@@ -23,6 +25,7 @@ import {
   Package,
   History,
   Star,
+  Heart,
   Settings as SettingsIcon,
   type LucideIcon,
 } from 'lucide-react'
@@ -300,7 +303,7 @@ function ExtraScreen({
  * of icon + label. These are all occasional destinations, so they get a menu
  * you dismiss rather than a screen you have to navigate back out of.
  */
-const MENU_ROWS: [string, ExtraPage | 'settings', LucideIcon][] = [
+const MENU_ROWS: [string, ExtraPage | 'settings' | 'partner', LucideIcon][] = [
   ['Total', 'total', Wallet],
   ['Stats', 'stats', BarChart3],
   ['Accounts', 'accounts', Landmark],
@@ -308,8 +311,12 @@ const MENU_ROWS: [string, ExtraPage | 'settings', LucideIcon][] = [
   ['Balance', 'balance', Users],
   ['Taruna', 'stock', Package],
   ['Muskan', 'lastDone', History],
-  // Last in the list — bottom of the hold-and-drag menu, right above Settings.
   ['Khushi', 'kitee', Star],
+  // A destination, not a setting. It was in the Settings grid first, which
+  // buried something reached far more often than Style or PC Manager behind
+  // an extra tap. Last two in the list — bottom of the hold-and-drag menu,
+  // where the thumb already is.
+  ['Partner Journal', 'partner', Heart],
   ['Settings', 'settings', SettingsIcon],
 ]
 
@@ -370,14 +377,28 @@ function SleepHeaderSky() {
 }
 
 /**
- * The photo behind Daily's header. A readability scrim is layered over it in
- * CSS (.header-phoenix-bg::after) — without one, white text on a bright,
+ * The phoenix behind Daily's header. A readability scrim is layered over it
+ * in CSS (.header-phoenix-bg::after) — without one, white text on a bright,
  * busy crop is barely legible; that job used to be done by a blur.
+ *
+ * Drawn rather than photographed since the source was a pixel chart whose
+ * grid lines were baked into its pixels and showed at header size. See
+ * lib/phoenixArt.ts for how the trace was done. `meet`, not `slice`: with
+ * the chart's black sheet gone the bird is a transparent emblem, so there is
+ * no longer any reason to crop its wingtips off to fill a rectangle.
  */
 function HeaderPhoenixBg() {
   return (
     <div className="header-phoenix-bg" aria-hidden>
-      <img src="/img/phoenix.jpg" alt="" />
+      <svg
+        className="header-phoenix-art"
+        viewBox={PHOENIX_VIEWBOX}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {PHOENIX_PATHS.map(([fill, d]) => (
+          <path key={fill} fill={fill} d={d} />
+        ))}
+      </svg>
     </div>
   )
 }
@@ -517,6 +538,10 @@ function Shell() {
   const [extraPage, setExtraPage] = useState<ExtraPage | null>(null)
   const [moreMenu, setMoreMenu] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Its own overlay rather than an ExtraPage: Partner renders a full Screen
+  // with its own header and lock, so nesting it inside ExtraScreen's header
+  // would stack two title bars.
+  const [partnerOpen, setPartnerOpen] = useState(false)
   // Stable identity across renders — the gesture hook closes over this array
   // via a ref, but it still only needs to be rebuilt when a picker actually
   // changes, not on every keystroke elsewhere in the shell.
@@ -526,7 +551,12 @@ function Shell() {
         key: label,
         label,
         icon,
-        onPick: () => (target === 'settings' ? setSettingsOpen(true) : setExtraPage(target)),
+        onPick: () =>
+          target === 'settings'
+            ? setSettingsOpen(true)
+            : target === 'partner'
+              ? setPartnerOpen(true)
+              : setExtraPage(target),
       })),
     [],
   )
@@ -558,9 +588,6 @@ function Shell() {
     initial: Partial<Omit<Transaction, 'id'>>
     editingId?: string
   }>(null)
-  const [unlocked, setUnlocked] = useState(false)
-  const [pin, setPin] = useState('')
-  const [wrongPin, setWrongPin] = useState(false)
   const [exitHint, setExitHint] = useState(false)
   const [hiddenOpen, setHiddenOpen] = useState(false)
   const secretPress = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -576,6 +603,7 @@ function Shell() {
     extraPage ||
     moreMenu ||
     settingsOpen ||
+    partnerOpen ||
     memoEditor ||
     habitEditor ||
     choreEditor ||
@@ -745,6 +773,7 @@ function Shell() {
   useBackHandler(picker, () => setPicker(false))
   useBackHandler(moreMenu, () => setMoreMenu(false))
   useBackHandler(settingsOpen, () => setSettingsOpen(false))
+  useBackHandler(partnerOpen, () => setPartnerOpen(false))
   useBackHandler(!!extraPage, () => setExtraPage(null))
   // A non-default sub-tab within Transactions is also a level to come back from.
   useBackHandler(tab === 'Trans.' && sub !== homeSub, () => setSub(homeSub))
@@ -779,88 +808,6 @@ function Shell() {
           aria-hidden
         >
           ₹
-        </div>
-      </div>
-    )
-  }
-
-  if (db.settings.passcode && !unlocked) {
-    return (
-      <div
-        className="h-full flex flex-col items-center justify-center gap-7 animate-fade"
-        style={{ paddingTop: 'var(--sat)', paddingBottom: 'calc(var(--sab) + 24px)' }}
-      >
-        <div
-          className="w-16 h-16 rounded-[var(--r-md)] flex items-center justify-center animate-fade"
-          style={{
-            background: 'linear-gradient(155deg, color-mix(in srgb, var(--accent) 80%, #fff), var(--accent))',
-            boxShadow: 'none',
-            color: '#fff',
-          }}
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="4" y="10" width="16" height="10" rx="3" />
-            <path d="M8 10V7a4 4 0 018 0v3" />
-          </svg>
-        </div>
-
-        <div className="text-center">
-          <div className="t-h1">Kaithwas</div>
-          <div className="text-[13px] mt-1" style={{ color: 'var(--muted)' }}>
-            Enter your passcode
-          </div>
-        </div>
-
-        <div className={`flex gap-3.5 ${wrongPin ? 'animate-shake' : ''}`}>
-          {[0, 1, 2, 3].map((i) => {
-            const filled = i < pin.length
-            return (
-              <span
-                key={i}
-                className="w-3.5 h-3.5 rounded-full"
-                style={{
-                  background: filled ? 'var(--accent)' : 'transparent',
-                  border: `1.5px solid ${filled ? 'var(--accent)' : 'var(--line-strong)'}`,
-                  boxShadow: filled
-                    ? '0 0 12px -1px color-mix(in srgb, var(--accent) 80%, var(--surface))'
-                    : 'none',
-                  transform: filled ? 'scale(1.15)' : 'scale(1)',
-                  transition: 'all 260ms var(--ease-out)',
-                }}
-              />
-            )
-          })}
-        </div>
-
-        <div className="grid grid-cols-3 gap-3.5 w-[264px]">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map((k, i) => (
-            <button
-              key={i}
-              className={`h-[68px] rounded-full text-[22px] press ${k ? 'border' : ''}`}
-              style={{
-                borderColor: k ? 'var(--line)' : 'transparent',
-                boxShadow: k ? 'none, inset 0 1px 0 var(--line)' : 'none',
-              }}
-              onClick={() => {
-                if (!k) return
-                if (k === '⌫') return setPin((p) => p.slice(0, -1))
-                const next = (pin + k).slice(0, 4)
-                setPin(next)
-                if (next.length === 4) {
-                  if (next === db.settings.passcode) setUnlocked(true)
-                  else {
-                    setWrongPin(true)
-                    setTimeout(() => {
-                      setPin('')
-                      setWrongPin(false)
-                    }, 520)
-                  }
-                }
-              }}
-            >
-              {k}
-            </button>
-          ))}
         </div>
       </div>
     )
@@ -1441,6 +1388,8 @@ function Shell() {
           go there. */}
       <FanFab open={moreMenu} actions={fanActions} onClose={() => setMoreMenu(false)} />
 
+      {partnerOpen && <Partner onBack={() => setPartnerOpen(false)} />}
+
       {settingsOpen && (
         <div
           className="fixed inset-0 z-40 flex flex-col animate-slide"
@@ -1478,7 +1427,17 @@ function Shell() {
             </div>
           </header>
           <main className="flex-1 flex flex-col overflow-hidden">
-            <More month={month} onOpenPage={setExtraPage} />
+            <More
+              month={month}
+              onOpenPage={(p) => {
+                setSettingsOpen(false)
+                if (p === 'partner') {
+                  setPartnerOpen(true)
+                } else {
+                  setExtraPage(p)
+                }
+              }}
+            />
           </main>
           {hiddenOpen && <Hidden onBack={() => setHiddenOpen(false)} />}
         </div>

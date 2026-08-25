@@ -77,7 +77,7 @@ export function MoreScreens({
 }
 
 /** The screens that moved out of the bottom bar, in the order he uses them. */
-const PAGES: [string, ExtraPage, string][] = [
+const PAGES: [string, ExtraPage | 'partner', string][] = [
   ['Total', 'total', 'M4 19h16M7 16V9M12 16V5M17 16v-4'],
   // Right after Total — same reasoning as its position in the FAB fan in
   // App.tsx (MENU_ROWS): the two get opened for the same kind of reason
@@ -87,9 +87,13 @@ const PAGES: [string, ExtraPage, string][] = [
   ['Accounts', 'accounts',
     'M12 4c4.4 0 8 1.1 8 2.5S16.4 9 12 9 4 7.9 4 6.5 7.6 4 12 4zM4 6.5v5C4 12.9 7.6 14 12 14s8-1.1 8-2.5v-5M4 11.5v5C4 17.9 7.6 19 12 19s8-1.1 8-2.5v-5'],
   ['Loans', 'loans', 'M3 10h18M3 10l2-5h14l2 5M5 10v9h14v-9M9 14h6'],
+  ['Balance', 'balance',
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'],
   ['Taruna', 'stock', 'M4 7l8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4M12 11v10'],
   ['Muskan', 'lastDone',
     'M8 2v4M16 2v4M4 8h16M5 5h14a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zM9 16l2 2 4-4'],
+  ['Partner Journal', 'partner',
+    'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'],
 ]
 
 export function More({
@@ -97,7 +101,7 @@ export function More({
   onOpenPage,
 }: {
   month: string
-  onOpenPage: (p: ExtraPage) => void
+  onOpenPage: (p: ExtraPage | 'partner') => void
 }) {
   const [page, setPage] = useState<Page>(null)
 
@@ -520,7 +524,6 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
   const s = db.settings
   const [page, setPage] = useState<string | null>(null)
   const [sheet, setSheet] = useState<string | null>(null)
-  const [pin, setPin] = useState('')
 
   const onOff = (v: boolean) => (v ? 'ON' : 'OFF')
   const flip = (k: keyof Settings) => updateSettings({ [k]: !s[k] } as Partial<Settings>)
@@ -627,17 +630,6 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
       <Row label="Date format" value={s.dateFormat} onClick={() => setSheet('dateFormat')} />
 
       <SectionLabel>Other</SectionLabel>
-      <Row
-        label="Passcode"
-        value={s.passcode ? 'ON' : 'OFF'}
-        onClick={() => {
-          if (s.passcode) updateSettings({ passcode: undefined })
-          else {
-            setPin('')
-            setSheet('passcode')
-          }
-        }}
-      />
       <Row
         label="Alarm Setting"
         value={s.reminderTime ?? 'OFF'}
@@ -764,31 +756,6 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
         </div>
       </Sheet>
 
-      <Sheet open={sheet === 'passcode'} onClose={() => setSheet(null)} title="Set 4-digit passcode">
-        <div className="p-6">
-          <input
-            className="w-full text-center text-[28px] tracking-[0.5em] border-b pb-2"
-            style={{ borderColor: 'var(--line)' }}
-            inputMode="numeric"
-            maxLength={4}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            autoFocus
-          />
-          <button
-            className="w-full mt-6 py-3 rounded-lg text-white font-semibold"
-            style={{ background: 'var(--accent)' }}
-            disabled={pin.length !== 4}
-            onClick={() => {
-              updateSettings({ passcode: pin })
-              setSheet(null)
-            }}
-          >
-            Set passcode
-          </button>
-        </div>
-      </Sheet>
-
       <Sheet open={sheet === 'vaultLock'} onClose={() => setSheet(null)} title="Vault lock">
         <ChangeVaultLock onClose={() => setSheet(null)} />
       </Sheet>
@@ -804,7 +771,8 @@ function Configuration({ month, onBack }: { month: string; onBack: () => void })
  * something only the owner knows.
  */
 function ChangeVaultLock({ onClose }: { onClose: () => void }) {
-  const { db, setVaultSecurity, updateVaultItemCipher, updatePasswordItemCipher } = useStore()
+  const { db, setVaultSecurity, updateVaultItemCipher, updatePasswordItemCipher, updatePartnerItemCipher } =
+    useStore()
   const [step, setStep] = useState<'verify' | 'choose' | 'confirm'>('verify')
   /** The key the current sequence derives, kept from the verify step so
    *  the confirm step can re-encrypt the vault with it. */
@@ -897,10 +865,19 @@ function ChangeVaultLock({ onClose }: { onClose: () => void }) {
             const plain = await decryptJSON<unknown>(prev, item.cipher)
             pwNext.push({ id: item.id, cipher: await encryptJSON(key, plain) })
           }
+          // The Partner Journal rides the same key. Miss it here and
+          // changing the lock orphans every record in it — the exact bug
+          // this whole block exists to stop.
+          const partnerNext: { id: string; cipher: string }[] = []
+          for (const item of db.partnerItems) {
+            const plain = await decryptJSON<unknown>(prev, item.cipher)
+            partnerNext.push({ id: item.id, cipher: await encryptJSON(key, plain) })
+          }
 
           const check = await encryptText(key, CANARY)
           for (const v of vaultNext) updateVaultItemCipher(v.id, v.cipher)
           for (const v of pwNext) updatePasswordItemCipher(v.id, v.cipher)
+          for (const v of partnerNext) updatePartnerItemCipher(v.id, v.cipher)
           setVaultSecurity({ salt, check })
           hapticMedium()
           setBusy(false)

@@ -227,3 +227,7 @@ export function PhotoCropper({
  */
 export const NOTE_CARD_ASPECT = 3.84
 export const HABIT_TILE_ASPECT = 1.64
+/** A vault row wearing a photo. ISO/IEC 7810 ID-1 — the ratio of every bank
+ *  card, debit card and most IDs — so a photo of the card fills the row
+ *  without the framing step having to fight the card's own shape. */
+export const VAULT_CARD_ASPECT = 1.586

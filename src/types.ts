@@ -609,7 +609,149 @@ export interface VaultItemPlain {
   notes?: string
   /** Passbook page, cheque leaf, that sort of thing — data URLs, encrypted along with everything else here. */
   photos?: string[]
+  /**
+   * A photo behind the row itself, so a saved card looks like the card it
+   * stands for instead of a list entry — same idea as a habit tile's
+   * `customSurfaceImage`, and the same cropper.
+   *
+   * Deliberately *inside* the cipher rather than in the photo sidecar that
+   * transactions, notes and habits use. Those sit in the attachment bucket
+   * in the clear; a photo of the front of a bank card must not. It costs
+   * nothing to keep here — vault items are already excluded from the hot
+   * blob, so this never touches cold-start time.
+   */
+  cardImage?: string
 }
+
+/* ---------------------------------------------------------------- partner */
+
+/**
+ * The Partner Journal — a private record of one person, kept encrypted under
+ * the same vault key as everything else in Shafali.
+ *
+ * Encrypted rather than plain for one concrete reason: the backup is
+ * `JSON.stringify(db)` in the clear, and the app now actively nudges the
+ * owner to send copies off the device. Anything written here would ride
+ * along in a WhatsApp or Drive file otherwise.
+ *
+ * `kind` stays outside the cipher so a screen can count and filter without
+ * unlocking. Everything identifying — her name, dates, notes, photos — is
+ * inside it.
+ */
+export type PartnerKind =
+  | 'profile'
+  | 'cycle'
+  | 'symptom'
+  | 'preference'
+  | 'want'
+  | 'gift'
+  | 'date'
+  | 'journal'
+
+/** At rest. Same shape as VaultItem, for the same reasons. */
+export interface PartnerItem {
+  id: string
+  kind: PartnerKind
+  order: number
+  /** base64 AES-GCM ciphertext of a JSON-encoded PartnerPlain */
+  cipher: string
+}
+
+/** Fields every partner record carries, whatever its kind. */
+export interface PartnerPlainBase {
+  /** ISO timestamps */
+  createdAt: string
+  updatedAt: string
+  /** Where it came from — "she told me", "I noticed", "she mentioned it". */
+  source?: string
+  notes?: string
+  tags?: string[]
+}
+
+export interface PartnerProfile extends PartnerPlainBase {
+  name: string
+  nickname?: string
+  birthday?: string
+  photo?: string
+  relationshipStart?: string
+  anniversary?: string
+}
+
+/**
+ * One observed period.
+ *
+ * `certainty` is the field that makes this usable. Observations here are
+ * second-hand and irregular — "she told me it started today" is not the same
+ * evidence as "sometime last week", and treating them alike produces a
+ * confident prediction built on a guess. It widens the estimate instead.
+ */
+export interface PartnerCycle extends PartnerPlainBase {
+  startDate: string
+  endDate?: string
+  flow?: 'light' | 'medium' | 'heavy'
+  certainty: 'exact' | 'about' | 'guess'
+}
+
+/** What was noticed on a day. Named for what it is: the owner's observation,
+ *  not her own log — she has no way to enter anything on this device. */
+export interface PartnerSymptom extends PartnerPlainBase {
+  date: string
+  observed: string[]
+}
+
+export interface PartnerPreference extends PartnerPlainBase {
+  category: string
+  value: string
+  dateLearned?: string
+  importance?: 'low' | 'normal' | 'high'
+}
+
+export interface PartnerWant extends PartnerPlainBase {
+  item: string
+  category?: string
+  dateMentioned: string
+  priority?: 'low' | 'normal' | 'high'
+  fulfilled?: boolean
+}
+
+export interface PartnerGift extends PartnerPlainBase {
+  item: string
+  status: 'idea' | 'given'
+  date?: string
+  occasion?: string
+  price?: number
+  reaction?: string
+  liked?: boolean
+  whereBought?: string
+}
+
+export interface PartnerDate extends PartnerPlainBase {
+  label: string
+  date: string
+  recurring?: boolean
+  /** Opt-in only — a reminder is never created without being confirmed. */
+  remind?: boolean
+}
+
+export interface PartnerJournalEntry extends PartnerPlainBase {
+  date: string
+  text: string
+  /** Which quick-entry prompt this answered, if any. */
+  prompt?: string
+  mood?: string
+  photo?: string
+}
+
+/** The decrypted shape of a PartnerItem, discriminated by its item's `kind`. */
+export type PartnerPlain =
+  | PartnerProfile
+  | PartnerCycle
+  | PartnerSymptom
+  | PartnerPreference
+  | PartnerWant
+  | PartnerGift
+  | PartnerDate
+  | PartnerJournalEntry
 
 /** At rest, everything but bookkeeping fields is one opaque encrypted blob. */
 export interface VaultItem {
@@ -955,6 +1097,7 @@ export interface DB {
   hiddenMemos: Memo[]
   vaultItems: VaultItem[]
   passwordItems: PasswordItem[]
+  partnerItems: PartnerItem[]
   docItems: DocItem[]
   vaultSecurity?: VaultSecurity
   loans: Loan[]

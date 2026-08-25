@@ -66,12 +66,113 @@ export interface AttachPayload {
   docItems: DB['docItems']
   vaultItems: DB['vaultItems']
   passwordItems: DB['passwordItems']
+  partnerItems: DB['partnerItems']
   purchaseItems: DB['purchaseItems']
+  /**
+   * Photos belonging to records that must stay in core (see PhotoSidecar).
+   * Optional: a database written before this existed simply has none, and
+   * its photos are still sitting inline in core where the merge below finds
+   * them anyway.
+   */
+  photoSidecar?: PhotoSidecar
+}
+
+/**
+ * The photos that could not be moved out of core by moving a whole
+ * collection.
+ *
+ * The four collections above exist *mostly* to carry attachments, so keeping
+ * the whole list out of core was enough. Three others carry photos on records
+ * that core genuinely needs at once: a Daily entry's receipt photos, a note's
+ * skin, a habit card's background. Those lists cannot move — Daily, Niba and
+ * Habits are the first things drawn — but the images on them are never needed
+ * to draw a row, only to open one.
+ *
+ * So the records stay in core and their image fields are lifted out to here.
+ * Measured on a dev build: three habit cards and four note skins took core
+ * from 26KB to 825KB, and core is rewritten *in full* on every change —
+ * every meter drag, every tick, every keystroke — as well as read in full on
+ * every cold start. Receipt photos on transactions are the same problem and
+ * grow without limit.
+ *
+ * Keyed by record id, so a photo can find its way home even if the record
+ * moved, and so a record deleted while this was on disk simply leaves an
+ * orphan entry that the next save drops.
+ */
+export interface PhotoSidecar {
+  /** transaction id -> its `photo` / `photos` fields */
+  transactions: Record<string, { photo?: string; photos?: string[] }>
+  /** memo id -> customSkinImage */
+  memos: Record<string, string>
+  /** habit id -> customSurfaceImage */
+  habits: Record<string, string>
 }
 
 function splitForSave(data: DB): { core: Record<string, unknown>; attach: AttachPayload } {
-  const { loans, docItems, vaultItems, passwordItems, purchaseItems, ...core } = data
-  return { core, attach: { loans, docItems, vaultItems, passwordItems, purchaseItems } }
+  const { loans, docItems, vaultItems, passwordItems, partnerItems, purchaseItems, ...rest } = data
+
+  const photoSidecar: PhotoSidecar = { transactions: {}, memos: {}, habits: {} }
+
+  // Only the records that actually carry an image are copied; the rest are
+  // passed through by reference, so this costs nothing on a database with no
+  // photos in it.
+  const transactions = rest.transactions.map((t) => {
+    if (!t.photo && !t.photos?.length) return t
+    const { photo, photos, ...lean } = t
+    photoSidecar.transactions[t.id] = { photo, photos }
+    return lean as typeof t
+  })
+  const memos = rest.memos.map((m) => {
+    if (!m.customSkinImage) return m
+    const { customSkinImage, ...lean } = m
+    photoSidecar.memos[m.id] = customSkinImage
+    return lean as typeof m
+  })
+  const habits = rest.habits.map((h) => {
+    if (!h.customSurfaceImage) return h
+    const { customSurfaceImage, ...lean } = h
+    photoSidecar.habits[h.id] = customSurfaceImage
+    return lean as typeof h
+  })
+
+  return {
+    core: { ...rest, transactions, memos, habits },
+    attach: { loans, docItems, vaultItems, passwordItems, partnerItems, purchaseItems, photoSidecar },
+  }
+}
+
+/**
+ * Puts the sidecar's photos back on their records.
+ *
+ * Only ever *adds*: a record that already carries an image keeps it, so a
+ * photo attached in the gap between the app becoming interactive and the
+ * attachment bucket arriving is never overwritten by the older copy on disk.
+ * Same rule, and same reason, as the id-union in mergeAttach.
+ */
+export function applyPhotoSidecar(data: DB, sidecar: PhotoSidecar | undefined): DB {
+  if (!sidecar) return data
+  const hasAny =
+    Object.keys(sidecar.transactions).length ||
+    Object.keys(sidecar.memos).length ||
+    Object.keys(sidecar.habits).length
+  if (!hasAny) return data
+
+  return {
+    ...data,
+    transactions: data.transactions.map((t) => {
+      const p = sidecar.transactions[t.id]
+      if (!p || t.photo || t.photos?.length) return t
+      return { ...t, ...(p.photo ? { photo: p.photo } : null), ...(p.photos ? { photos: p.photos } : null) }
+    }),
+    memos: data.memos.map((m) => {
+      const img = sidecar.memos[m.id]
+      return !img || m.customSkinImage ? m : { ...m, customSkinImage: img }
+    }),
+    habits: data.habits.map((h) => {
+      const img = sidecar.habits[h.id]
+      return !img || h.customSurfaceImage ? h : { ...h, customSurfaceImage: img }
+    }),
+  }
 }
 
 /**
