@@ -382,14 +382,40 @@ function HeaderPhoenixBg() {
   )
 }
 
-/** Same idea as HeaderPhoenixBg, for Habits' own header instead of Daily's. */
+/**
+ * Habits' header: the top of the same night the screen below it draws.
+ *
+ * This was the cross-stitch castle photo, which put a castle here and
+ * another one at the foot of the screen with a gap between them — two
+ * castles, and a visible seam where the photo stopped. It also carried the
+ * pattern's grid lines and its watermark, both of which showed.
+ *
+ * So the header holds only the sky now: the same gradient, the same stars,
+ * running down into the screen's own without a join. The castle belongs to
+ * the horizon, and there is exactly one of it. Same reasoning as the sliver
+ * of night above the Sleep tab.
+ */
 function HeaderCastleBg() {
   return (
-    <div className="header-phoenix-bg" aria-hidden>
-      <img src="/img/habits-castle.jpg" alt="" />
+    <div className="header-castle-sky" aria-hidden>
+      {CASTLE_HEADER_STARS.map(([x, y, r], i) => (
+        <span
+          key={i}
+          className="header-castle-star"
+          style={{ left: `${x}%`, top: `${y}%`, width: r, height: r, animationDelay: `${(i * 0.6) % 4}s` }}
+        />
+      ))}
     </div>
   )
 }
+
+/** [x%, y%, px] — fixed, so the header's sky does not reshuffle every time
+ *  the tab re-renders. */
+const CASTLE_HEADER_STARS: [number, number, number][] = [
+  [8, 22, 2], [17, 58, 1.5], [26, 30, 2.5], [35, 72, 1.5], [44, 18, 2],
+  [52, 52, 1.5], [61, 26, 2.5], [69, 64, 1.5], [77, 34, 2], [85, 70, 1.5],
+  [92, 20, 2.5], [12, 80, 1.5], [40, 88, 2], [66, 84, 1.5], [88, 50, 2],
+]
 
 /** Same idea again, for Kitee's (Purchase's) header — a purple cosmic swirl
  *  rather than a place, since this tab isn't set anywhere in particular. */
@@ -895,8 +921,10 @@ function Shell() {
                   // hiding it. Every other tab has nothing behind the header
                   // worth bending, so it stays its own opaque ground like
                   // before the glass existed.
+                  // Habits draws its own sky now, like Sleep — a 55% wash
+                  // over it would only mute the stars it is there to show.
                   backgroundColor:
-                    sub === 'Daily' || sub === 'Habits' || sub === 'Niba'
+                    sub === 'Daily' || sub === 'Niba'
                       ? `color-mix(in srgb, ${TAB_THEME[sub].ground} 55%, transparent)`
                       : TAB_THEME[sub].ground,
                   // Sleep's hairline is its own tint at low strength rather
@@ -904,6 +932,10 @@ function Shell() {
                   // edge cut the moonlight off hard right where it should
                   // keep bleeding into the screen below.
                   ...(sub === 'Sleep' ? { borderColor: 'rgba(151, 125, 255, 0.16)' } : null),
+                  // Habits gets no hairline at all: the header's sky and the
+                  // screen's are now one gradient, and a rule across it is
+                  // exactly the seam this was meant to remove.
+                  ...(sub === 'Habits' ? { borderColor: 'transparent' } : null),
                 }
               : null),
           } as React.CSSProperties

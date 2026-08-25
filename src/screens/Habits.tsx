@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Habit, MoodDef } from '../types'
 import { MOOD_COLOR_CHOICES } from '../types'
 import { useStore } from '../store'
@@ -15,6 +15,7 @@ import { useToast } from '../components/Toast'
 import { fileToPhoto } from '../lib/photo'
 import { PhotoCropper, HABIT_TILE_ASPECT } from '../components/PhotoCropper'
 import { cancelHabitReminders, ensureNotificationPermission, syncHabitReminders } from '../lib/notifications'
+import { useGridReorder, HOLD_MS, type GridReorder } from '../lib/useGridReorder'
 
 /** How many days each tile's dot row shows. */
 const RECENT_DAYS = 14
@@ -184,7 +185,7 @@ function HabitNight() {
 }
 
 export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | null; onCloseEditor: () => void }) {
-  const { db, toggleHabitLog } = useStore()
+  const { db, toggleHabitLog, reorderHabits } = useStore()
   const [detail, setDetail] = useState<Habit | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [moodOpen, setMoodOpen] = useState(false)
@@ -223,6 +224,15 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
 
   const scroller = useRef<HTMLDivElement>(null)
 
+  // Measured off the live nodes rather than computed from a column count,
+  // so the drop target is right whatever the grid wraps to.
+  const tileRects = useRef(new Map<string, HTMLElement>())
+  const reorder = useGridReorder(
+    useMemo(() => active.map((h) => h.id), [active]),
+    reorderHabits,
+    useCallback((id: string) => tileRects.current.get(id)?.getBoundingClientRect() ?? null, []),
+  )
+
   return (
     // The sky sits in a clipped wrapper alongside the scroller rather than
     // inside it, so it stays put while the tiles scroll over it.
@@ -246,9 +256,18 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
                 logs={logsByHabit.get(h.id) ?? EMPTY_SET}
                 onToggleToday={() => toggleHabitLog(h.id, today)}
                 onOpenDetail={() => setDetail(h)}
+                registerNode={(el) => {
+                  if (el) tileRects.current.set(h.id, el)
+                  else tileRects.current.delete(h.id)
+                }}
+                reorder={reorder}
               />
             ))}
           </div>
+        )}
+
+        {reorder.dragging && (
+          <div className="habit-reorder-hint">Drag it where you want it</div>
         )}
 
         {moodOpen && <MoodDetail onClose={() => setMoodOpen(false)} />}
@@ -909,12 +928,16 @@ function HabitTile({
   logs,
   onToggleToday,
   onOpenDetail,
+  registerNode,
+  reorder,
 }: {
   habit: Habit
   index: number
   logs: Set<string>
   onToggleToday: () => void
   onOpenDetail: () => void
+  registerNode: (el: HTMLDivElement | null) => void
+  reorder: GridReorder
 }) {
   const today = todayKey()
   const doneToday = logs.has(today)
@@ -930,22 +953,51 @@ function HabitTile({
   // before anyone has chosen anything.
   const surface = habit.surface ?? HABIT_SURFACES[index % HABIT_SURFACES.length]
 
+  const grab = reorder.handlers(habit.id)
+  const lifted = reorder.dragging === habit.id
+  const counting = reorder.holdingId === habit.id
+  // The slot this tile would be pushed into if the lifted one landed here.
+  const isTarget =
+    reorder.dragging !== null &&
+    !lifted &&
+    reorder.overIndex !== null &&
+    reorder.overIndex === index
+
   return (
     <div
-      ref={tile}
+      ref={(el) => {
+        tile.current = el
+        registerNode(el)
+      }}
       className="habit-tile"
       data-surface={surface}
       data-held={held || undefined}
+      data-lifted={lifted || undefined}
+      data-counting={counting || undefined}
+      data-target={isTarget || undefined}
       // Held, not hovered — there is no hover on a phone. pointercancel is
       // Android taking the gesture for a scroll, which must also end it.
-      onPointerDown={() => setHeld(true)}
-      onPointerUp={() => setHeld(false)}
-      onPointerCancel={() => setHeld(false)}
+      onPointerDown={(e) => {
+        setHeld(true)
+        grab.onPointerDown(e)
+      }}
+      onPointerMove={grab.onPointerMove}
+      onPointerUp={(e) => {
+        setHeld(false)
+        grab.onPointerUp(e)
+      }}
+      onPointerCancel={() => {
+        setHeld(false)
+        grab.onPointerCancel()
+      }}
       onPointerLeave={() => setHeld(false)}
       style={
         {
           '--c1': habit.color,
           '--c2': `color-mix(in srgb, ${habit.color} 35%, var(--accent))`,
+          // Drives the pickup ring's duration, so the CSS and the timer that
+          // actually fires can never disagree about how long the hold is.
+          '--hold-ms': `${HOLD_MS}ms`,
         } as React.CSSProperties
       }
     >

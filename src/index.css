@@ -6948,3 +6948,109 @@ button:disabled {
   flex: 1;
   accent-color: var(--accent);
 }
+
+/* Habits' header sky — the top of the screen's own night, so the two meet
+   without a join. The screen below sets --hab-* on itself; the header is a
+   sibling of that element, not a child, so the two values it needs are
+   repeated here rather than inherited. */
+.header-castle-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Ends on exactly the colour .habit-sky starts with, so header and screen
+     are one gradient with no step at the join. Both values are literals
+     because the header is a sibling of the screen, not a child, and cannot
+     read its --hab-* variables. */
+  background: linear-gradient(to bottom, #08050f 0%, #0a0713 100%);
+}
+.header-castle-star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.45);
+  opacity: 0.7;
+  animation: habit-twinkle 5.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-castle-star {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   Dragging a habit tile to a new place.
+
+   The hold is long (3s) on purpose — these tiles are tapped constantly and
+   sit inside a scroller, so a quick press-and-hold would turn ordinary use
+   into accidental reordering. A long wait with no feedback reads as broken,
+   though, so the tile shows the wait filling as a bar across its foot.
+   ========================================================================== */
+
+.habit-tile[data-counting]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 0 999px 999px 0;
+  background: #fff;
+  box-shadow: 0 0 8px 1px rgba(255, 255, 255, 0.6);
+  z-index: 3;
+  animation: habit-hold var(--hold-ms, 3000ms) linear forwards;
+}
+@keyframes habit-hold {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+/* Lifted: out of the page and under the thumb. Kept subtle — it still has
+   to be recognisable as the tile you picked up. */
+.habit-tile[data-lifted] {
+  z-index: 5;
+  transform: scale(1.06);
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.75);
+  opacity: 0.94;
+}
+
+/* Where it would land. An outline rather than a moved tile: actually
+   shuffling the grid under a moving finger makes the target you were aiming
+   at slide out from under it. */
+.habit-tile[data-target]::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px dashed rgba(255, 255, 255, 0.85);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.habit-tile[data-lifted],
+.habit-tile[data-target] {
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
+}
+
+.habit-reorder-hint {
+  position: sticky;
+  top: 6px;
+  z-index: 6;
+  margin: 0 auto 8px;
+  width: fit-content;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0d0918;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.8);
+  animation: fade-in var(--dur) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .habit-tile[data-counting]::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

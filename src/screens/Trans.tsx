@@ -71,7 +71,11 @@ export const TAB_THEME: Record<TransTab, { tint: string; ground: string }> = {
   // Habits sits on the castle photo now — red buried itself in the image
   // the same way it did on Daily. White reads better here than the black
   // Daily uses, since the castle is mostly a dark silhouette.
-  Habits: { tint: '#ffffff', ground: '#0b0b0f' },
+  // Habits sits on a drawn castle night now rather than the cross-stitch
+  // photo. The ground matches the top of that sky exactly (--hab-deep in the
+  // stylesheet, repeated here because the header sits outside .habit-screen
+  // and cannot read it) so nothing shows through as a band at the join.
+  Habits: { tint: '#ffffff', ground: '#08050f' },
   // Lavender on a deep purple ground. Kept in step with --slp-deep in the
   // stylesheet — the header sits outside .sleep-screen, so it cannot read
   // that variable and the value has to be repeated here.
