@@ -1153,48 +1153,60 @@ button:disabled {
    keeps a streak number readable in daylight with a nebula behind it.
    ========================================================================== */
 
-.habit-sky {
+/* ==========================================================================
+   Habits — a castle night, carried down from the header.
+
+   The header sits on a pixel-art castle under a violet sky; the screen under
+   it used to be an accent-red glow that had nothing to do with it, so the two
+   read as different places. This is that same night, full height. Its palette
+   is its own — like Sleep's — rather than derived from --accent, because the
+   scene is violet whatever colour the rest of the app is set to.
+   ========================================================================== */
+
+.habit-screen {
+  --hab-deep: #0a0713;
+  --hab-sky: #4a3a86;
+  --hab-sky-hi: #6f5cbe;
+  --hab-stone: #08060f;
+  --hab-window: #ffcf7a;
+  --hab-moon: #ded7f5;
+  --hab-mist: #6f5cbe;
+}
+
+.habit-night {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+}
+
+/* Violet at the horizon, near-black overhead — and darkened hard at both
+   ends so the header meets something calm and the tiles keep their
+   contrast over it. */
+.habit-sky {
+  position: absolute;
+  inset: 0;
   background:
-    /* darkened top and bottom so headers and the nav bar meet something
-       calm, and so muted text further down still has contrast under it */
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.12) 34%, rgba(0, 0, 0, 0.66) 100%),
-    radial-gradient(72% 42% at 6% 80%, color-mix(in srgb, var(--accent) 92%, #000) 0%, transparent 62%),
-    radial-gradient(58% 32% at 80% 97%, color-mix(in srgb, var(--accent) 62%, #000) 0%, transparent 60%),
-    radial-gradient(64% 40% at 24% 6%, color-mix(in srgb, var(--accent) 22%, #000) 0%, transparent 66%),
-    #07080a;
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 22%, transparent 62%, rgba(4, 2, 10, 0.72) 100%),
+    radial-gradient(78% 46% at 50% 96%, var(--hab-sky-hi) 0%, transparent 70%),
+    linear-gradient(to bottom, var(--hab-deep) 0%, #241a4d 46%, var(--hab-sky) 100%);
 }
 
-/* The halftone. A plain dot grid, masked down to the nebula shapes so the
-   dots cluster where the colour is and thin out into the dark — which is what
-   makes it read as printed rather than as a screen-door texture. */
-.habit-sky::before {
-  content: '';
+/* Low in the sky rather than up at the top: the tiles occupy the whole
+   upper half, and a moon behind the mood card is a moon nobody ever sees.
+   Down here it sits in the open band above the battlements, which is also
+   the more menacing place for it. */
+.habit-moon {
   position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, var(--accent) 1px, transparent 1.35px);
-  background-size: 6px 6px;
-  opacity: 0.9;
-  -webkit-mask-image:
-    radial-gradient(66% 38% at 6% 80%, #000 12%, transparent 66%),
-    radial-gradient(52% 28% at 80% 97%, #000 0%, transparent 62%);
-  mask-image:
-    radial-gradient(66% 38% at 6% 80%, #000 12%, transparent 66%),
-    radial-gradient(52% 28% at 80% 97%, #000 0%, transparent 62%);
-}
-
-/* Sparse white dust over the whole sky, finer and much weaker than the
-   halftone so the two layers do not read as one grid. */
-.habit-sky::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0.6px, transparent 0.9px);
-  background-size: 23px 31px;
-  opacity: 0.5;
+  right: 17%;
+  top: 57%;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, #fff 0%, var(--hab-moon) 62%, #b6abdd 100%);
+  box-shadow:
+    0 0 30px 10px color-mix(in srgb, var(--hab-moon) 30%, transparent),
+    0 0 90px 40px color-mix(in srgb, var(--hab-sky-hi) 22%, transparent);
 }
 
 .habit-stars {
@@ -1203,6 +1215,100 @@ button:disabled {
   width: 100%;
   height: 100%;
   color: #fff;
+}
+.habit-star {
+  animation: habit-twinkle 5.5s ease-in-out infinite;
+}
+@keyframes habit-twinkle {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 0.28; }
+}
+
+/* Bats. Three, crossing slowly at different heights — enough to catch the
+   eye once and never enough to become the subject. */
+.habit-bats {
+  position: absolute;
+  inset: 0;
+}
+.habit-bat {
+  position: absolute;
+  width: 22px;
+  height: 9px;
+  fill: #0d0918;
+  opacity: 0.75;
+  animation: habit-fly 26s linear infinite;
+}
+.habit-bat:nth-child(1) { top: 18%; width: 16px; }
+.habit-bat:nth-child(2) { top: 30%; width: 26px; animation-duration: 34s; }
+.habit-bat:nth-child(3) { top: 24%; width: 12px; animation-duration: 21s; opacity: 0.5; }
+@keyframes habit-fly {
+  from { transform: translateX(-14vw) translateY(0); }
+  25%  { transform: translateX(20vw) translateY(-14px); }
+  50%  { transform: translateX(52vw) translateY(8px); }
+  75%  { transform: translateX(84vw) translateY(-10px); }
+  to   { transform: translateX(118vw) translateY(0); }
+}
+
+/* The castle. Anchored to the bottom and allowed to run off both sides, so
+   it reads as something you are standing under. */
+.habit-castle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 46%;
+}
+.habit-stone {
+  fill: var(--hab-stone);
+}
+.habit-window {
+  fill: var(--hab-window);
+  opacity: 0.82;
+}
+.habit-window.is-alive {
+  animation: habit-flicker 4.2s ease-in-out infinite;
+}
+@keyframes habit-flicker {
+  0%, 100% { opacity: 0.85; }
+  42% { opacity: 0.85; }
+  46% { opacity: 0.24; }
+  50% { opacity: 0.8; }
+  54% { opacity: 0.35; }
+  60% { opacity: 0.85; }
+}
+
+/* Fog at the castle's feet — two bands drifting opposite ways at different
+   speeds, so the pattern never visibly repeats. */
+.habit-mist {
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  bottom: 0;
+  height: 26%;
+  background: radial-gradient(60% 100% at 30% 100%, color-mix(in srgb, var(--hab-mist) 38%, transparent) 0%, transparent 70%),
+    radial-gradient(50% 100% at 74% 100%, color-mix(in srgb, var(--hab-mist) 30%, transparent) 0%, transparent 72%);
+  filter: blur(6px);
+  animation: habit-drift 42s ease-in-out infinite alternate;
+}
+.habit-mist-2 {
+  height: 17%;
+  opacity: 0.7;
+  animation-duration: 61s;
+  animation-direction: alternate-reverse;
+}
+@keyframes habit-drift {
+  from { transform: translateX(-5%); }
+  to { transform: translateX(5%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .habit-star,
+  .habit-bat,
+  .habit-window.is-alive,
+  .habit-mist {
+    animation: none;
+  }
 }
 
 /* -------------------------------- tiles -------------------------------- */

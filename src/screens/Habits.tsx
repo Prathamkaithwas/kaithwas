@@ -40,17 +40,26 @@ export const HABIT_SURFACES = [
 ] as const
 
 /**
- * The night sky behind this tab.
+ * The night this tab lives in.
  *
- * Drawn rather than shipped: a couple of hundred bytes of gradient instead of
- * a few hundred kilobytes of PNG, sharp at any screen size, and every colour
- * in it comes from `--accent`, so it follows the accent setting instead of
- * being frozen to one red.
+ * The header already sat on a pixel-art castle under a violet sky; the rest
+ * of the screen was a red accent glow that had nothing to do with it, so the
+ * two read as different places stitched together. This carries the header's
+ * scene the whole way down — the same trick the Sleep tab uses to stop its
+ * moon ending at the header's bottom edge.
  *
- * The stars are laid out by hand rather than randomly — a fixed arrangement
- * can be balanced, and it also means the sky does not reshuffle itself on
- * every render.
+ * Drawn rather than shipped as another image: a few hundred bytes of SVG
+ * instead of a few hundred kilobytes, sharp at any screen size, and free of
+ * the grid lines and watermark baked into the header's cross-stitch source.
+ *
+ * Everything animated here is slow, small, and CSS-only — a flicker in three
+ * windows, a drift in the mist, a twinkle in the stars. The tiles have to
+ * stay readable on top of it, which is also why the sky darkens hard at both
+ * ends.
  */
+
+/** [x%, y%, radius, ray length] — laid out by hand rather than randomly, so
+ *  the arrangement can be balanced and does not reshuffle every render. */
 const STARS: [x: number, y: number, r: number, rays: number][] = [
   [18, 12, 2.6, 0], [72, 20, 4.2, 26], [88, 9, 2.1, 0], [46, 33, 2.8, 12],
   [66, 41, 3.4, 0], [30, 52, 1.8, 0], [82, 58, 2.4, 0], [12, 68, 2.0, 0],
@@ -58,17 +67,42 @@ const STARS: [x: number, y: number, r: number, rays: number][] = [
   [40, 104, 1.9, 0], [86, 112, 3.2, 18], [16, 120, 2.2, 0], [60, 130, 2.5, 0],
 ]
 
-function HabitSky() {
+/** Crenellations along the top of a wall — the shape that says "castle"
+ *  before any other detail registers. */
+function battlements(x: number, w: number, y: number, step = 5) {
+  const out = []
+  for (let i = 0; x + i * step < x + w; i++) {
+    if (i % 2 === 0) out.push(<rect key={`${x}-${i}`} x={x + i * step} y={y - 3} width={step} height={4} />)
+  }
+  return out
+}
+
+/** Lit windows. The three marked `flicker` are the only moving light in the
+ *  castle — a whole facade of blinking windows reads as a fairground, one or
+ *  two reads as somebody still awake in there. */
+const WINDOWS: [x: number, y: number, w: number, h: number, flicker?: boolean][] = [
+  [10, 80, 2.5, 4], [16, 80, 2.5, 4], [22, 80, 2.5, 4],
+  [28.5, 60, 2.5, 4, true],
+  [55, 70, 3, 5], [62, 70, 3, 5, true], [69, 70, 3, 5],
+  [64.5, 40, 3, 4],
+  [106, 56, 2.5, 4], [106, 66, 2.5, 4, true],
+  [128, 84, 2.5, 3.5], [136, 84, 2.5, 3.5],
+  [156, 64, 2.5, 4], [163, 64, 2.5, 4],
+  [178, 88, 2.5, 3.5],
+]
+
+function HabitNight() {
   return (
-    <div className="habit-sky" aria-hidden>
-      <svg
-        className="habit-stars"
-        viewBox="0 0 100 160"
-        preserveAspectRatio="xMidYMid slice"
-        fill="none"
-      >
+    <div className="habit-night" aria-hidden>
+      <div className="habit-sky" />
+
+      {/* Low over the towers, so the castle reads as standing in front of
+          it rather than floating on an unrelated background. */}
+      <div className="habit-moon" />
+
+      <svg className="habit-stars" viewBox="0 0 100 160" preserveAspectRatio="xMidYMid slice" fill="none">
         {STARS.map(([x, y, r, rays], i) => (
-          <g key={i} opacity={i % 4 === 0 ? 0.95 : 0.7}>
+          <g key={i} className="habit-star" style={{ animationDelay: `${(i * 0.7) % 5}s` }} opacity={i % 4 === 0 ? 0.95 : 0.7}>
             {rays > 0 && (
               <>
                 <path d={`M${x - rays} ${y}H${x + rays}`} stroke="currentColor" strokeWidth="0.35" />
@@ -86,6 +120,65 @@ function HabitSky() {
           </g>
         ))}
       </svg>
+
+      <div className="habit-bats">
+        {[0, 1, 2].map((i) => (
+          <svg key={i} className="habit-bat" viewBox="0 0 24 10" style={{ animationDelay: `${i * -7}s` }}>
+            <path d="M0 5 Q4 0 7 4 Q9 1 12 5 Q15 1 17 4 Q20 0 24 5 Q20 3 17 7 Q15 4 12 8 Q9 4 7 7 Q4 3 0 5Z" />
+          </svg>
+        ))}
+      </div>
+
+      {/* Anchored to the bottom and allowed to run off both sides, so it
+          reads as a castle you are standing under rather than a picture of
+          one placed on the page. */}
+      <svg className="habit-castle" viewBox="0 0 200 100" preserveAspectRatio="xMidYMax slice">
+        <g className="habit-stone">
+          {/* left wall */}
+          <rect x="0" y="72" width="34" height="28" />
+          {battlements(0, 34, 72)}
+          {/* left tower */}
+          <rect x="24" y="52" width="16" height="48" />
+          {battlements(24, 16, 52, 4)}
+          {/* keep */}
+          <rect x="46" y="60" width="50" height="40" />
+          {battlements(46, 50, 60)}
+          {/* central spire */}
+          <rect x="59" y="34" width="14" height="30" />
+          <polygon points="59,34 66,14 73,34" />
+          {/* right tower with a spire */}
+          <rect x="100" y="48" width="18" height="52" />
+          <polygon points="100,48 109,30 118,48" />
+          {/* right wall */}
+          <rect x="118" y="76" width="46" height="24" />
+          {battlements(118, 46, 76)}
+          {/* far tower */}
+          <rect x="150" y="56" width="18" height="44" />
+          {battlements(150, 18, 56, 4.5)}
+          {/* far wall running off the edge */}
+          <rect x="166" y="80" width="34" height="20" />
+          {battlements(166, 34, 80)}
+        </g>
+
+        <g className="habit-windows">
+          {WINDOWS.map(([x, y, w, h, flicker], i) => (
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              className={flicker ? 'habit-window is-alive' : 'habit-window'}
+              style={flicker ? { animationDelay: `${i * 1.3}s` } : undefined}
+            />
+          ))}
+        </g>
+      </svg>
+
+      {/* Two bands, drifting opposite ways at different speeds, so the fog
+          never repeats visibly. */}
+      <div className="habit-mist" />
+      <div className="habit-mist habit-mist-2" />
     </div>
   )
 }
@@ -133,8 +226,8 @@ export function Habits({ editing, onCloseEditor }: { editing: Habit | 'new' | nu
   return (
     // The sky sits in a clipped wrapper alongside the scroller rather than
     // inside it, so it stays put while the tiles scroll over it.
-    <div className="relative flex-1 overflow-hidden">
-      <HabitSky />
+    <div className="relative flex-1 overflow-hidden habit-screen">
+      <HabitNight />
       <div ref={scroller} className="relative h-full overflow-y-auto no-scrollbar pb-content px-3 pt-3">
         {/* Mood is the hero — the thing worth seeing first on opening the
             tab. There used to be a completion-count card here too ("2/4");

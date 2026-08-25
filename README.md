@@ -67,6 +67,9 @@ Any habit can also carry **daily reminders** — a list of clock times, not a si
 
 Picking the day's mood then opens a short **written reflection** — "what is worth remembering about today?", "what could have gone better?", "what are you thankful for?". Both the questions and how many there are are yours: **More → Configuration → Journal questions** edits the list in place, and deleting one keeps every answer already written against it, so putting the question back brings its history back too. Answers are filed with the day and read back in the Journal, which defaults to showing only days something was actually written on — a month of bare mood taps is a chart, not something anyone re-reads.
 
+### Habits — a castle night
+The header sits on a pixel-art castle under a violet sky, and the whole screen is now that same night rather than stopping at the header's bottom edge: a huge castle silhouette across the foot of the screen with lit windows, a low moon above the battlements, stars, drifting fog and three bats crossing slowly. Drawn as SVG rather than shipped as another photo — a few hundred bytes instead of a few hundred kilobytes, sharp at any size, and free of the grid and watermark baked into the header's cross-stitch source. Only three windows flicker; a whole facade of blinking lights reads as a fairground rather than somebody still awake in there.
+
 ### Sleep
 A 24-hour dial, not a 12-hour one — bedtime and wake time can't land on the same point the way they would on a half-day face, so the two handles are never ambiguous to drag. A rolling 7-night average sits above it, with a full year-of-squares activity calendar below.
 
